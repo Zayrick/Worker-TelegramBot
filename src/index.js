@@ -684,8 +684,26 @@ class Webhook {
 
 	  // 校验 URL 中的密钥是否与机器人的令牌哈希匹配
 	  if (url_key === this.access_key) {
-		// 解析请求体
-		this.request = await this.processRequest(request)
+		// 解析请求头信息
+		this.size = parseInt(request.headers.get('content-length')) || 0
+		this.type = request.headers.get('content-type') || ''
+
+		/**
+		 * @note 某些客户端（例如 Telegram）可能采用分块传输编码，从而导致 'content-length' 为空，
+		 *       此处不再依赖 size 判断，而是只要检测到 content-type 即尝试解析请求体。
+		 */
+		if (this.type) {
+		  this.request = await this.processRequest(request)
+		} else if (request.method == 'GET') {
+		  this.request = {
+			message: '正在访问 Webhook 端点'
+		  }
+		} else {
+		  this.request = {
+			message: '',
+			error: '无效的内容类型或请求体'
+		  }
+		}
 
 		// 实例化机器人
 		this.bot = new TelegramBot({
@@ -694,7 +712,7 @@ class Webhook {
 		})
 
 		// 根据请求类型进行路由
-		if (request.method === 'POST' && this.request.type.includes('application/json') && this.request.size > 6 && this.request.content.message) {
+		if (request.method === 'POST' && this.request.type.includes('application/json') && this.request.content && this.request.content.message) {
 		  // 处理来自 Telegram 的 Webhook 更新
 		  this.response = await this.bot.update(this.request)
 		} else if (request.method === 'GET') {
@@ -723,10 +741,15 @@ class Webhook {
 	 */
 	async processRequest(req) {
 	  let request = req
+	  // 解析请求头信息
 	  request.size = parseInt(request.headers.get('content-length')) || 0
 	  request.type = request.headers.get('content-type') || ''
 
-	  if (request.size && request.type) {
+	  /**
+	   * @note 某些客户端（例如 Telegram）可能采用分块传输编码，从而导致 'content-length' 为空，
+	   *       此处不再依赖 size 判断，而是只要检测到 content-type 即尝试解析请求体。
+	   */
+	  if (request.type) {
 		request.content = await this.getContent(request)
 	  } else if (request.method == 'GET') {
 		request.content = {
