@@ -212,6 +212,11 @@ class Webhook {
 	async update(request) {
 	  try {
 		this.message = request.content.message
+		/**
+		 * @note 无论收到何种类型消息，均记录日志以满足审计要求。
+		 *       使用 ISO 时间戳便于后续日志检索和对齐。
+		 */
+		console.log(`[${new Date().toISOString()}] 收到消息:`, this.message)
 		// 判断消息体中是否包含文本
 		if (this.message.hasOwnProperty('text')) {
 
