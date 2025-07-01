@@ -2,7 +2,7 @@
  * @file index.js
  * @brief 基于 Cloudflare Worker 的 Telegram 机器人后端服务。
  * @author Zayrick
- * @version 2.0
+ * @version 3.0
  * @date 2025-07-01
  *
  * @description
