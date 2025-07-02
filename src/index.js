@@ -279,8 +279,15 @@ async function handleUpdate(update) {
   }
 }
 
-// 处理 Webhook 请求
-async function handleWebhook(request, env) {
+/**
+ * 处理来自 Telegram 的 Webhook 请求。
+ *
+ * @param {Request} request  Cloudflare Worker 的请求对象
+ * @param {Record<string, any>} env    环境变量集合
+ * @param {ExecutionContext} ctx       Worker 执行上下文，用于延长生命周期
+ * @returns {Response} HTTP 响应对象
+ */
+async function handleWebhook(request, env, ctx) {
   // 验证密钥
   const secretHeader = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
   if (secretHeader !== CONFIG.BOT_SECRET) {
@@ -292,10 +299,14 @@ async function handleWebhook(request, env) {
   const update = await request.json();
   console.log('收到 Telegram Update:', update.update_id);
 
-  // 异步处理更新（不阻塞响应）
-  handleUpdate(update).catch(error => {
-    console.error('处理更新时出错:', error);
-  });
+  // 异步处理更新，使用 ctx.waitUntil 保证任务在响应后继续执行
+  ctx.waitUntil((async () => {
+    try {
+      await handleUpdate(update);
+    } catch (error) {
+      console.error('处理更新时出错:', error);
+    }
+  })());
 
   return new Response(JSON.stringify({ status: 'ok' }), {
     headers: { 'Content-Type': 'application/json' },
@@ -379,7 +390,8 @@ export default {
     switch (path) {
       case CONFIG.WEBHOOK_PATH:
         if (request.method === 'POST') {
-          return handleWebhook(request, env);
+          // 传递 ctx 以便在 handleWebhook 中调用 ctx.waitUntil
+          return handleWebhook(request, env, ctx);
         }
         break;
 
