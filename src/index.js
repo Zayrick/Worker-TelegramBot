@@ -19,6 +19,11 @@ const TOKEN = ENV_BOT_TOKEN
 const SECRET = ENV_BOT_SECRET
 const WEBHOOK_PATH = '/endpoint'
 
+// AI 配置
+const AI_API_ENDPOINT = ENV_AI_API_ENDPOINT
+const AI_MODEL_NAME = ENV_AI_MODEL_NAME
+const AI_API_KEY = ENV_AI_API_KEY
+
 /**
  * @brief 构造 Telegram Bot API URL。
  * @param {string} methodName - Telegram API 方法名
@@ -158,6 +163,46 @@ async function sendMarkdownExample (chatId) {
   return sendMarkdownV2Text(chatId, escapeMarkdown('但用户可能会写 ** 与 __，例如 `**粗体**` 和 `__斜体__`', '`'))
 }
 
+/**
+ * @brief 调用 AI 模型生成回复。
+ * @param {string} prompt - 用户输入
+ * @return {Promise<string|null>} AI 回复的文本，或在出错时返回 null
+ */
+async function getAIReply (prompt) {
+  if (!AI_API_ENDPOINT || !AI_MODEL_NAME || !AI_API_KEY) {
+    // 在生产环境中，敏感信息应使用日志服务记录，而不是 console.error
+    console.error('AI API configuration is missing.')
+    return 'AI 功能未配置。'
+  }
+
+  try {
+    const response = await fetch(AI_API_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${AI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: AI_MODEL_NAME,
+        messages: [{ role: 'user', content: prompt }],
+        stream: false
+      })
+    })
+
+    if (!response.ok) {
+      // 同样，生产环境中应有更完善的错误处理
+      console.error(`AI API request failed with status ${response.status}: ${await response.text()}`)
+      return 'AI 接口调用失败。'
+    }
+
+    const data = await response.json()
+    return data.choices[0]?.message?.content?.trim() ?? 'AI 未能生成有效回复。'
+  } catch (error) {
+    console.error('Error calling AI API:', error)
+    return '调用 AI 时发生网络错误。'
+  }
+}
+
 // ================================
 // 群组自动回复：工具函数
 // ================================
@@ -244,7 +289,7 @@ async function onUpdate (update) {
  * @brief 处理文本消息。
  * @param {Object} message - Telegram Message 对象
  */
-function onMessage (message) {
+async function onMessage (message) {
   const isGroup = isGroupChat(message.chat.type)
   const text = message.text ?? ''
 
@@ -276,6 +321,19 @@ function onMessage (message) {
   if (text.startsWith('/button2')) return sendTwoButtons(message.chat.id)
   if (text.startsWith('/button4')) return sendFourButtons(message.chat.id)
   if (text.startsWith('/markdown')) return sendMarkdownExample(message.chat.id)
+
+  if (text.toLowerCase().startsWith('/ai')) {
+    const commandEnd = text.indexOf(' ')
+    const prompt = commandEnd === -1 ? '' : text.substring(commandEnd).trim()
+    if (!prompt) {
+      return sendPlainText(message.chat.id, '请在 /AI 命令后输入你的问题。')
+    }
+    const aiReply = await getAIReply(prompt)
+    if (aiReply) {
+      return sendPlainText(message.chat.id, aiReply)
+    }
+    return // 如果 AI 没有回复，则不发送任何消息
+  }
 
   // /id 命令
   if (text.startsWith('/id') || text.startsWith('/ID')) {
