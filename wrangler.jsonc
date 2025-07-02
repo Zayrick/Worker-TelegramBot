@@ -4,7 +4,7 @@
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "telegram-worker-bot",
+	"name": "telegram-zhanbu-bot",
 	"main": "src/index.js",
 	"compatibility_date": "2025-07-01",
 	"observability": {
