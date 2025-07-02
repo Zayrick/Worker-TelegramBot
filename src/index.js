@@ -1,430 +1,416 @@
 /**
- * @file index.js
- * @brief Telegram Cloudflare Worker 入口文件，负责路由分发与业务处理。
- *
- * 本文件按照以下顺序组织代码，提高可读性与可维护性：
- * 1. 常量与配置
- * 2. 工具函数（URL 构造、Markdown 转义）
- * 3. Telegram API 包装函数
- * 4. 业务函数（发送示例消息、按钮等）
- * 5. Update 处理器（消息、回调查询）
- * 6. Webhook 路由处理器
- * 7. Cloudflare Worker 事件监听器
+ * Telegram Bot on Cloudflare Worker
+ * 主入口文件
  */
 
-// ================================
-// 1. 常量与配置
-// ================================
-const TOKEN = ENV_BOT_TOKEN
-const SECRET = ENV_BOT_SECRET
-const WEBHOOK_PATH = '/endpoint'
+// 导入工具模块
+import { GanZhi } from './utils/ganzhi.js';
+import { generateHexagram } from './utils/hexagram.js';
+import { escapeHtml } from './utils/text.js';
 
-// >>> 新增 AI 相关常量 <<<
-const AI_API_ENDPOINT = ENV_AI_API_ENDPOINT
-const AI_MODEL_NAME = ENV_AI_MODEL_NAME
-const AI_API_KEY = ENV_AI_API_KEY
-const AI_REQUEST_TIMEOUT_MS = 28000 // 28 秒超时，避免触发 Cloudflare Worker 30 秒限制
-// ================================
+// 环境变量配置
+const CONFIG = {
+  BOT_TOKEN: null, // 从环境变量获取
+  BOT_SECRET: null,
+  AI_API_ENDPOINT: null,
+  AI_MODEL_NAME: 'gpt-3.5-turbo',
+  AI_API_KEY: null,
+  AI_SYSTEM_PROMPT: '',
+  USER_WHITELIST: [],
+  GROUP_WHITELIST: [],
+  WEBHOOK_PATH: '/endpoint',
+};
 
-/**
- * @brief 构造 Telegram Bot API URL。
- * @param {string} methodName - Telegram API 方法名
- * @param {Object<string,string>=} params - 需附加的查询参数
- * @return {string} 拼接后的完整请求 URL
- */
-function apiUrl (methodName, params = null) {
-  let query = ''
-  if (params) {
-    query = '?' + new URLSearchParams(params).toString()
-  }
-  return `https://api.telegram.org/bot${TOKEN}/${methodName}${query}`
+// 初始化配置
+function initConfig(env) {
+  CONFIG.BOT_TOKEN = env.BOT_TOKEN || '';
+  CONFIG.BOT_SECRET = env.BOT_SECRET || '';
+  CONFIG.AI_API_ENDPOINT = env.AI_API_ENDPOINT || '';
+  CONFIG.AI_MODEL_NAME = env.AI_MODEL_NAME || 'gpt-3.5-turbo';
+  CONFIG.AI_API_KEY = env.AI_API_KEY || '';
+  CONFIG.AI_SYSTEM_PROMPT = env.AI_SYSTEM_PROMPT || '';
+
+  // 解析白名单
+  CONFIG.USER_WHITELIST = parseIdList(env.USER_WHITELIST || '');
+  CONFIG.GROUP_WHITELIST = parseIdList(env.GROUP_WHITELIST || '');
 }
 
-/**
- * @brief 转义字符串以符合 MarkdownV2 语法要求。
- * @param {string} str - 待转义原始字符串
- * @param {string} [except=''] - 不进行转义的字符集合
- * @return {string} 已转义字符串
- * @see https://core.telegram.org/bots/api#markdownv2-style
- */
-function escapeMarkdown (str, except = '') {
-  const all = '_*[]()~`>#+-=|{}.!\\'.split('').filter(c => !except.includes(c))
-  const regExSpecial = '^$*+?.()|{}[]\\'
-  const regEx = new RegExp('[' + all.map(c => (regExSpecial.includes(c) ? '\\' + c : c)).join('') + ']', 'gim')
-  return str.replace(regEx, '\\$&')
+// 解析ID列表（逗号或空格分隔）
+function parseIdList(raw) {
+  if (!raw || !raw.trim()) return [];
+  return raw.split(/[\s,]+/).filter(id => id).map(id => parseInt(id, 10));
 }
 
-/**
- * @brief 发送纯文本消息。
- * @param {number|string} chatId - 聊天 ID
- * @param {string} text - 消息文本
- * @return {Promise<Object>} Telegram API 响应
- */
-async function sendPlainText (chatId, text) {
-  return (await fetch(apiUrl('sendMessage', { chat_id: chatId, text }))).json()
+// Telegram API 基础 URL
+function apiUrl(method) {
+  return `https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/${method}`;
 }
 
-/**
- * @brief 发送 MarkdownV2 格式文本消息。
- * @param {number|string} chatId - 聊天 ID
- * @param {string} text - MarkdownV2 格式文本
- * @return {Promise<Object>} Telegram API 响应
- */
-async function sendMarkdownV2Text (chatId, text) {
-  return (await fetch(apiUrl('sendMessage', {
+// 发送消息到 Telegram
+async function sendMessage(chatId, text, options = {}) {
+  const payload = {
     chat_id: chatId,
-    text,
-    parse_mode: 'MarkdownV2'
-  }))).json()
+    text: text,
+    ...options
+  };
+
+  const response = await fetch(apiUrl('sendMessage'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  return response.json();
 }
 
-/**
- * @brief 发送带单个内联按钮的消息。
- * @param {number|string} chatId - 聊天 ID
- * @param {string} text - 消息文本
- * @param {{text:string,callback_data:string}} button - 按钮对象
- * @return {Promise<Object>} Telegram API 响应
- */
-async function sendInlineButton (chatId, text, button) {
-  return sendInlineButtonRow(chatId, text, [button])
-}
-
-/**
- * @brief 发送带一行多个按钮的消息。
- * @param {number|string} chatId - 聊天 ID
- * @param {string} text - 消息文本
- * @param {Array<{text:string,callback_data:string}>} buttonRow - 按钮行
- * @return {Promise<Object>} Telegram API 响应
- */
-async function sendInlineButtonRow (chatId, text, buttonRow) {
-  return sendInlineButtons(chatId, text, [buttonRow])
-}
-
-/**
- * @brief 发送带多行按钮的消息。
- * @param {number|string} chatId - 聊天 ID
- * @param {string} text - 消息文本
- * @param {Array<Array<{text:string,callback_data:string}>>} buttons - 多行按钮
- * @return {Promise<Object>} Telegram API 响应
- */
-async function sendInlineButtons (chatId, text, buttons) {
-  return (await fetch(apiUrl('sendMessage', {
+// 编辑消息
+async function editMessageText(chatId, messageId, text, options = {}) {
+  const payload = {
     chat_id: chatId,
-    reply_markup: JSON.stringify({ inline_keyboard: buttons }),
-    text
-  }))).json()
+    message_id: messageId,
+    text: text,
+    ...options
+  };
+
+  const response = await fetch(apiUrl('editMessageText'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  return response.json();
 }
 
-/**
- * @brief 回答 callback_query（按钮点击）。
- * @param {string} callbackQueryId - 回调查询 ID
- * @param {string|null} [text=null] - 可选提示文本
- * @return {Promise<Object>} Telegram API 响应
- */
-async function answerCallbackQuery (callbackQueryId, text = null) {
-  const data = { callback_query_id: callbackQueryId }
-  if (text) data.text = text
-  return (await fetch(apiUrl('answerCallbackQuery', data))).json()
+// 回复回调查询
+async function answerCallbackQuery(callbackQueryId, text) {
+  const payload = {
+    callback_query_id: callbackQueryId,
+    text: text,
+  };
+
+  const response = await fetch(apiUrl('answerCallbackQuery'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  return response.json();
 }
 
-/**
- * @brief 发送两按钮示例消息。
- * @param {number|string} chatId - 聊天 ID
- */
-function sendTwoButtons (chatId) {
-  return sendInlineButtonRow(chatId, '请点击下方任意按钮', [
-    { text: '按钮一', callback_data: 'data_1' },
-    { text: '按钮二', callback_data: 'data_2' }
-  ])
+// 权限检查
+function isAuthorized(chatId, chatType) {
+  if (chatType === 'private') {
+    return CONFIG.USER_WHITELIST.length === 0 || CONFIG.USER_WHITELIST.includes(chatId);
+  }
+  if (chatType === 'group' || chatType === 'supergroup') {
+    return CONFIG.GROUP_WHITELIST.length === 0 || CONFIG.GROUP_WHITELIST.includes(chatId);
+  }
+  return true;
 }
 
-/**
- * @brief 发送四按钮示例消息。
- * @param {number|string} chatId - 聊天 ID
- */
-function sendFourButtons (chatId) {
-  return sendInlineButtons(chatId, '请选择一个按钮', [
-    [
-      { text: '左上按钮', callback_data: 'Utah' },
-      { text: '右上按钮', callback_data: 'Colorado' }
-    ],
-    [
-      { text: '左下按钮', callback_data: 'Arizona' },
-      { text: '右下按钮', callback_data: 'New Mexico' }
-    ]
-  ])
-}
-
-/**
- * @brief 发送 Markdown 示例消息。
- * @param {number|string} chatId - 聊天 ID
- */
-async function sendMarkdownExample (chatId) {
-  await sendMarkdownV2Text(chatId, '这是 *粗体*，这是 _斜体_')
-  await sendMarkdownV2Text(chatId, escapeMarkdown('你可以这样写：*粗体* 和 _斜体_'))
-  return sendMarkdownV2Text(chatId, escapeMarkdown('但用户可能会写 ** 与 __，例如 `**粗体**` 和 `__斜体__`', '`'))
-}
-
-// ================================
-// 群组自动回复：工具函数
-// ================================
-
-/**
- * @brief 判断 chat.type 是否为群组。
- * @param {string} type - Telegram ChatType
- * @return {boolean}
- */
-function isGroupChat (type) {
-  return type === 'group' || type === 'supergroup'
-}
-
-/**
- * @brief 检测并去除消息中的命令片段 (/cmd 或 /cmd@BotName)。
- * @param {string} content  原始文本/标题
- * @param {readonly Object[]|undefined} entities  Telegram 消息实体
- * @return {{ mentioned: boolean, text: string }}   是否包含命令及净化后的文本
- */
-function stripMention (content, entities) {
-  if (!entities || entities.length === 0) return { mentioned: false, text: content }
-
-  let mentioned = false
-  let text = content
-
-  for (const ent of entities) {
-    const seg = content.slice(ent.offset, ent.offset + ent.length)
-
-    switch (ent.type) {
-      case 'bot_command': // /cmd 或 /cmd@BotName
-        mentioned = true
-        // 删除整段命令文本，保留参数
-        text = text.replace(seg, '')
-        break
-
-      default:
-        // 其它实体忽略
-        break
-    }
+// 调用 AI API
+async function queryAI(prompt, systemPrompt = null) {
+  if (!CONFIG.AI_API_ENDPOINT || !CONFIG.AI_API_KEY) {
+    throw new Error('AI 接口未配置');
   }
 
-  return { mentioned, text: text.trim() }
-}
+  const messages = [];
+  if (systemPrompt) {
+    messages.push({ role: 'system', content: systemPrompt });
+  }
+  messages.push({ role: 'user', content: prompt });
 
-/**
- * @brief 抽取 Message 内可用文本 (text / caption)。
- * @param {Object} msg Telegram Message 对象
- * @return {string}
- */
-function extractText (msg) {
-  return (msg.text ?? msg.caption ?? '').trim()
-}
+  const response = await fetch(CONFIG.AI_API_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${CONFIG.AI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: CONFIG.AI_MODEL_NAME,
+      messages: messages,
+    }),
+  });
 
-/**
- * @brief 群组消息处理核心入口。若需回复则返回纯文本，否则返回 null。
- * @param {Object} message Telegram Message 对象
- * @return {string|null}
- */
-function handleGroupMessage (message) {
-  // 1) 非群聊直接忽略
-  if (!isGroupChat(message.chat.type)) return null
-
-  // 2) 检测 /command
-  const { mentioned, text } = stripMention(
-    message.text ?? message.caption ?? '',
-    message.entities ?? message.caption_entities
-  )
-
-  if (!mentioned) return null
-  if (!text) return null
-  return text
-}
-
-/**
- * @brief 统一入口：处理 Update 对象。
- * @param {Object} update - Telegram Update 对象
- */
-async function onUpdate (update) {
-  if ('message' in update) await onMessage(update.message)
-  if ('callback_query' in update) await onCallbackQuery(update.callback_query)
-}
-
-/**
- * @brief 处理文本消息。
- * @param {Object} message - Telegram Message 对象
- */
-function onMessage (message) {
-  const isGroup = isGroupChat(message.chat.type)
-  const text = message.text ?? ''
-
-  /* ---------- AI 对话 ---------- */
-  if (/^\/ai/i.test(text)) {
-    const prompt = text.replace(/^\/ai(?:@\w+)?\s*/i, '').trim()
-
-    if (!prompt) {
-      return sendPlainText(message.chat.id, '请在 /AI 命令后输入你的问题。')
-    }
-
-    return queryAI(prompt)
-      .then(answer => sendPlainText(message.chat.id, answer))
-      .catch(err => sendPlainText(message.chat.id, `AI 请求失败: ${err.message}`))
+  if (!response.ok) {
+    throw new Error(`AI API 响应错误: ${response.status}`);
   }
 
-  /* ---------- 群组自动回复 ---------- */
-  const groupText = handleGroupMessage(message)
-  if (groupText !== null) {
-    // 只回 bot_command（/xxx 或 /xxx@BotName）
-    return sendPlainText(message.chat.id, groupText)
-  }
-
-  /* ---------- 非命令的群聊消息，直接忽略 ---------- */
-  if (isGroup && !text.startsWith('/')) {
-    // 既不是 bot_command，也不是 / 开头的文本 -> 无需任何回复
-    return
-  }
-
-  /* ---------- 私聊 / 群聊显式命令 ---------- */
-  if (text.startsWith('/start') || text.startsWith('/help')) {
-    return sendMarkdownV2Text(message.chat.id, '*功能列表:*\n' +
-      escapeMarkdown(
-        '`/help` - 查看此帮助信息\n' +
-        '/button2 - 发送含两个按钮的消息\n' +
-        '/button4 - 发送含四个按钮的消息\n' +
-        '/markdown - 发送 MarkdownV2 示例\n' +
-        '/ai <内容> - 向 AI 发送对话并获取回复\n' +
-        '/id - 返回用户或群组 ID\n',
-        '`'))
-  }
-
-  if (text.startsWith('/button2')) return sendTwoButtons(message.chat.id)
-  if (text.startsWith('/button4')) return sendFourButtons(message.chat.id)
-  if (text.startsWith('/markdown')) return sendMarkdownExample(message.chat.id)
-
-  // /id 命令
-  if (text.startsWith('/id') || text.startsWith('/ID')) {
-    const chatId = message.chat.id
-    const prefix = message.chat.type === 'private' ? '你的用户 ID: ' : '本群组 ID: '
-    return sendMarkdownV2Text(chatId, escapeMarkdown(`${prefix}\`${chatId}\``, '`'))
-  }
-
-  /* ---------- 未知命令 ---------- */
-  // 只在私聊（或你愿意回应的场景）提示未知命令
-  if (!isGroup) {
-    return sendMarkdownV2Text(message.chat.id, escapeMarkdown('*未知命令:* `' + text + '`\n' +
-      '使用 /help 查看可用命令。', '*`'))
-  }
+  const result = await response.json();
+  return result.choices?.[0]?.message?.content || JSON.stringify(result);
 }
 
-/**
- * @brief 处理回调查询（按钮点击）。
- * @param {Object} callbackQuery - Telegram CallbackQuery 对象
- */
-async function onCallbackQuery (callbackQuery) {
-  await sendMarkdownV2Text(callbackQuery.message.chat.id,
-    escapeMarkdown(`你点击了按钮，数据=\`${callbackQuery.data}\``, '`'))
-  return answerCallbackQuery(callbackQuery.id, '收到按钮点击！')
-}
+// 处理算命命令
+async function handleFortuneCommand(message, commandText) {
+  const chatId = message.chat.id;
+  let prompt = commandText.trim();
 
-/**
- * @brief 处理来自 Telegram 的 Webhook 请求。
- * @param {FetchEvent} event - Cloudflare FetchEvent
- * @return {Promise<Response>} HTTP 响应
- */
-async function handleWebhook (event) {
-  // 验证 Secret Token
-  if (event.request.headers.get('X-Telegram-Bot-Api-Secret-Token') !== SECRET) {
-    return new Response('Unauthorized', { status: 403 })
+  // 如果没有输入内容且回复了消息，使用被回复消息的内容
+  if (!prompt && message.reply_to_message) {
+    prompt = message.reply_to_message.text || message.reply_to_message.caption || '';
+    prompt = prompt.trim();
   }
 
-  // 读取 Update 对象并异步处理
-  const update = await event.request.json()
-  event.waitUntil(onUpdate(update))
+  if (!prompt) {
+    await sendMessage(chatId, '请在 /算命 命令后输入问题，或回复一条消息后仅发送 /算命。');
+    return;
+  }
 
-  return new Response('Ok')
-}
+  // 获取东八区当前时间
+  const now = new Date();
+  // 注意：这里使用UTC时间加8小时来模拟东八区时间
+  const cstTime = new Date(now.getTime() + now.getTimezoneOffset() * 60 * 1000 + 8 * 60 * 60 * 1000);
 
-/**
- * @brief 向 Telegram 注册 Webhook。
- * @param {FetchEvent} _event - Cloudflare FetchEvent（未使用）
- * @param {URL} requestUrl - 当前请求 URL
- * @param {string} suffix - Webhook 路径后缀
- * @param {string} secret - Secret Token
- * @return {Promise<Response>} HTTP 响应
- */
-async function registerWebhook (_event, requestUrl, suffix, secret) {
-  const webhookUrl = `${requestUrl.protocol}//${requestUrl.hostname}${suffix}`
-  const r = await (await fetch(apiUrl('setWebhook', {
-    url: webhookUrl,
-    secret_token: secret
-  }))).json()
-  return new Response('ok' in r && r.ok ? 'Ok' : JSON.stringify(r, null, 2))
-}
+  // 计算四柱八字
+  const ganZhi = new GanZhi(cstTime);
+  const baziText = `${ganZhi.gzYear()}年 ${ganZhi.gzMonth()}月 ${ganZhi.gzDay()}日 ${ganZhi.gzHour()}时`;
 
-/**
- * @brief 删除 Telegram Webhook。
- * @param {FetchEvent} _event - Cloudflare FetchEvent（未使用）
- * @return {Promise<Response>} HTTP 响应
- */
-async function unRegisterWebhook (_event) {
-  const r = await (await fetch(apiUrl('setWebhook', { url: '' }))).json()
-  return new Response('ok' in r && r.ok ? 'Ok' : JSON.stringify(r, null, 2))
-}
+  // 随机生成三个数字并计算卦象
+  const randNumbers = [
+    Math.floor(Math.random() * 9999) + 1,
+    Math.floor(Math.random() * 9999) + 1,
+    Math.floor(Math.random() * 9999) + 1,
+  ];
+  const hexagramText = generateHexagram(randNumbers);
 
-// >>> 新增：调用 AI 接口 <<<
-/**
- * @brief 向 AI 接口发送聊天请求。
- * @param {string} prompt - 用户输入的提示词
- * @return {Promise<string>} AI 返回的消息内容
- */
-async function queryAI (prompt) {
-  // 使用 AbortController 实现超时控制
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS)
+  // 构造发送给 AI 的提示
+  const formattedPrompt = `
+所问之事：${prompt}
+所得之卦：${hexagramText}
+所占之时：${baziText}
+${cstTime.getFullYear()}年${String(cstTime.getMonth() + 1).padStart(2, '0')}月${String(cstTime.getDate()).padStart(2, '0')}日 ${String(cstTime.getHours()).padStart(2, '0')}:${String(cstTime.getMinutes()).padStart(2, '0')}`;
 
-  let resp
+  // 确定回复的目标消息
+  const targetMessageId = message.reply_to_message?.message_id || message.message_id;
+
+  // 发送占位符
+  const placeholderResp = await sendMessage(chatId, '🔮', {
+    reply_to_message_id: targetMessageId,
+  });
+  const placeholderMessageId = placeholderResp.result?.message_id;
+
   try {
-    resp = await fetch(AI_API_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${AI_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: AI_MODEL_NAME,
-        messages: [{ role: 'user', content: prompt }]
-      }),
-      signal: controller.signal
-    })
-  } catch (err) {
-    // 捕获因超时导致的 AbortError
-    if (err.name === 'AbortError') {
-      throw new Error('AI 请求超时')
+    // 向 AI 请求
+    const aiAnswer = await queryAI(formattedPrompt, CONFIG.AI_SYSTEM_PROMPT || null);
+    const htmlAnswer = `<blockquote>${escapeHtml(aiAnswer)}</blockquote>`;
+
+    // 替换占位符
+    if (placeholderMessageId) {
+      await editMessageText(chatId, placeholderMessageId, htmlAnswer, {
+        parse_mode: 'HTML',
+      });
+    } else {
+      await sendMessage(chatId, htmlAnswer, {
+        parse_mode: 'HTML',
+        reply_to_message_id: targetMessageId,
+      });
     }
-    throw err
-  } finally {
-    clearTimeout(timeoutId)
-  }
+  } catch (error) {
+    console.error('AI 请求失败:', error);
+    const errorText = `AI 请求失败: ${error.message}`;
 
-  if (!resp.ok) {
-    throw new Error(`AI API 响应错误: ${resp.status}`)
+    if (placeholderMessageId) {
+      await editMessageText(chatId, placeholderMessageId, errorText);
+    } else {
+      await sendMessage(chatId, errorText, {
+        reply_to_message_id: targetMessageId,
+      });
+    }
   }
-
-  const data = await resp.json()
-  // OpenAI / OpenRouter 兼容结构
-  return (data.choices?.[0]?.message?.content) ?? JSON.stringify(data)
 }
 
-/**
- * @brief Worker 入口：监听 fetch 事件并路由到对应处理器。
- */
-addEventListener('fetch', event => {
-  const url = new URL(event.request.url)
+// 处理消息
+async function handleMessage(message) {
+  const chatId = message.chat.id;
+  const chatType = message.chat.type;
+  const text = message.text || '';
 
-  if (url.pathname === WEBHOOK_PATH) {
-    event.respondWith(handleWebhook(event))
-  } else if (url.pathname === '/registerWebhook') {
-    event.respondWith(registerWebhook(event, url, WEBHOOK_PATH, SECRET))
-  } else if (url.pathname === '/unRegisterWebhook') {
-    event.respondWith(unRegisterWebhook(event))
-  } else {
-    event.respondWith(new Response('No handler for this request'))
+  console.log(`收到消息: chatId=${chatId}, chatType=${chatType}, text="${text}"`);
+
+  // 权限检查
+  if (!isAuthorized(chatId, chatType)) {
+    if (chatType === 'private') {
+      await sendMessage(chatId, '您暂无权限使用此 Bot，请联系管理员。');
+    }
+    return;
   }
-})
+
+  // 处理算命命令
+  if (text.match(/^\/算命(?:@\w+)?\s*/i)) {
+    const commandText = text.replace(/^\/算命(?:@\w+)?\s*/i, '');
+    await handleFortuneCommand(message, commandText);
+    return;
+  }
+
+  // 群组消息处理
+  if ((chatType === 'group' || chatType === 'supergroup') && !text.startsWith('/')) {
+    return;
+  }
+
+  // 未知命令提示（私聊）
+  if (chatType === 'private' && text.startsWith('/')) {
+    await sendMessage(chatId, `未知命令: ${text}\n仅支持 /算命 命令。`);
+  }
+}
+
+// 处理回调查询
+async function handleCallbackQuery(callbackQuery) {
+  const chatId = callbackQuery.message.chat.id;
+  const chatType = callbackQuery.message.chat.type;
+  const callbackData = callbackQuery.data;
+  const callbackQueryId = callbackQuery.id;
+
+  if (!isAuthorized(chatId, chatType)) {
+    await answerCallbackQuery(callbackQueryId, '无权限。');
+    return;
+  }
+
+  await sendMessage(chatId, `你点击了按钮，数据=${callbackData}`);
+  await answerCallbackQuery(callbackQueryId, '收到按钮点击！');
+}
+
+// 处理 Telegram Update
+async function handleUpdate(update) {
+  if (update.message) {
+    await handleMessage(update.message);
+  }
+  if (update.callback_query) {
+    await handleCallbackQuery(update.callback_query);
+  }
+}
+
+// 处理 Webhook 请求
+async function handleWebhook(request, env) {
+  // 验证密钥
+  const secretHeader = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
+  if (secretHeader !== CONFIG.BOT_SECRET) {
+    console.warn('收到未经授权的 Webhook 请求');
+    return new Response('Unauthorized', { status: 403 });
+  }
+
+  // 获取更新
+  const update = await request.json();
+  console.log('收到 Telegram Update:', update.update_id);
+
+  // 异步处理更新（不阻塞响应）
+  handleUpdate(update).catch(error => {
+    console.error('处理更新时出错:', error);
+  });
+
+  return new Response(JSON.stringify({ status: 'ok' }), {
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+// 注册 Webhook
+async function registerWebhook(request) {
+  const url = new URL(request.url);
+  const webhookUrl = `${url.protocol}//${url.host}${CONFIG.WEBHOOK_PATH}`;
+
+  const response = await fetch(apiUrl('setWebhook'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      url: webhookUrl,
+      secret_token: CONFIG.BOT_SECRET,
+    }),
+  });
+
+  const result = await response.json();
+
+  if (result.ok) {
+    console.log('Webhook 注册成功:', webhookUrl);
+    return new Response(JSON.stringify({
+      status: 'success',
+      webhook_url: webhookUrl,
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  console.error('Webhook 注册失败:', result);
+  return new Response(JSON.stringify({
+    status: 'error',
+    result: result,
+  }), {
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+// 取消注册 Webhook
+async function unregisterWebhook() {
+  const response = await fetch(apiUrl('setWebhook'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: '' }),
+  });
+
+  const result = await response.json();
+
+  if (result.ok) {
+    console.log('Webhook 已成功删除');
+    return new Response(JSON.stringify({
+      status: 'success',
+      message: 'Webhook removed',
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  console.error('Webhook 删除失败:', result);
+  return new Response(JSON.stringify({
+    status: 'error',
+    result: result,
+  }), {
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+// Worker 主入口
+export default {
+  async fetch(request, env, ctx) {
+    // 初始化配置
+    initConfig(env);
+
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    // 路由处理
+    switch (path) {
+      case CONFIG.WEBHOOK_PATH:
+        if (request.method === 'POST') {
+          return handleWebhook(request, env);
+        }
+        break;
+
+      case '/registerWebhook':
+        if (request.method === 'GET') {
+          return registerWebhook(request);
+        }
+        break;
+
+      case '/unRegisterWebhook':
+        if (request.method === 'GET') {
+          return unregisterWebhook();
+        }
+        break;
+
+      case '/':
+        return new Response(JSON.stringify({
+          message: 'Telegram Bot Server is running'
+        }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+      case '/health':
+        return new Response(JSON.stringify({
+          status: 'healthy',
+          bot_token_configured: Boolean(CONFIG.BOT_TOKEN),
+        }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+    }
+
+    return new Response('Not Found', { status: 404 });
+  },
+};

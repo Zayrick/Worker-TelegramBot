@@ -9,7 +9,7 @@
 	"compatibility_date": "2025-07-01",
 	"observability": {
 		"enabled": true
-	}
+	},
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
@@ -27,10 +27,21 @@
 	 * Environment Variables
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 	 */
-	// "vars": { "MY_VARIABLE": "production_value" },
+	"vars": {
+		"AI_MODEL_NAME": "gpt-3.5-turbo",
+		"AI_SYSTEM_PROMPT": ""
+	},
 	/**
 	 * Note: Use secrets to store sensitive data.
 	 * https://developers.cloudflare.com/workers/configuration/secrets/
+	 *
+	 * 需要通过 wrangler secret put 命令设置的敏感变量:
+	 * - BOT_TOKEN: Telegram Bot Token
+	 * - BOT_SECRET: Webhook 验证密钥
+	 * - AI_API_ENDPOINT: AI API 地址 (如 https://openrouter.ai/api/v1/chat/completions)
+	 * - AI_API_KEY: AI API Key
+	 * - USER_WHITELIST: 用户白名单 (可选)
+	 * - GROUP_WHITELIST: 群组白名单 (可选)
 	 */
 
 	/**

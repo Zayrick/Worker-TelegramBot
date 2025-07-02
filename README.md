@@ -1,183 +1,148 @@
-# Cloudflare Worker Telegram 机器人
+# Telegram Bot on Cloudflare Worker
 
-> 基于 **Cloudflare Worker** 与 **Wrangler** 的零服务器、低时延 Telegram Bot 后端示例。
+这是一个运行在 Cloudflare Worker 上的 Telegram Bot，支持算命功能。
 
----
+## 功能特点
 
-## 📖 目录
+- 🔮 支持 `/算命` 命令，结合八字和卦象进行占卜
+- 🤖 集成 AI 对话功能（支持 OpenAI 兼容的 API）
+- 🔐 支持用户和群组白名单
+- ⚡ 基于 Cloudflare Worker，无服务器架构
+- 🌏 自动计算东八区时间的八字
 
-1. [项目简介](#项目简介)
-2. [功能亮点](#功能亮点)
-3. [运行前准备](#运行前准备)
-4. [快速开始](#快速开始)
-5. [环境变量](#环境变量)
-6. [Webhook 管理](#webhook-管理)
-7. [可用命令](#可用命令)
-8. [目录结构](#目录结构)
-9. [本地开发与调试](#本地开发与调试)
-10. [单元测试](#单元测试)
-11. [故障排查](#故障排查)
-12. [许可证](#许可证)
+## 部署步骤
 
----
+### 1. 前置要求
 
-## 项目简介
+- 安装 [Node.js](https://nodejs.org/) (v16 或更高版本)
+- 安装 [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
+- 拥有 Cloudflare 账号
+- 已创建 Telegram Bot（通过 [@BotFather](https://t.me/botfather)）
 
-本仓库演示如何使用 **Cloudflare Worker** 部署一个 Telegram 机器人，无需购买或维护任何云服务器即可实现全球边缘加速。核心逻辑均位于 `src/index.js`，代码清晰、易于扩展，适合作为个人或团队快速启动 Bot 项目的脚手架。
-
----
-
-## 功能亮点
-
-| 🚀 特性 | 描述 |
-| ------ | ---- |
-| ✨ 零服务器 | 全量运行于 Cloudflare 边缘节点，省去运维烦恼 |
-| 🔒 双重安全 | 使用固定 Webhook 路由 + Header `X-Telegram-Bot-Api-Secret-Token` 防御恶意请求 |
-| 🧩 命令即代码 | 所有指令逻辑集中在单文件，阅读成本极低，新增命令只需几行代码 |
-| 🕹️ 交互示例 | 内置两键、四键与 Markdown 消息示例，上手即用 |
-| 🧪 单元测试 | 通过 **Vitest** 保证核心工具函数行为稳定 |
-
----
-
-## 运行前准备
-
-1. 拥有一个 Telegram Bot Token（向 @BotFather 获取）。
-2. 拥有一个可用的 Cloudflare 账号并创建 **Worker**。
-3. 本地安装 **Node.js ≥ 18** 与 **npm**。
-
----
-
-## 快速开始
+### 2. 安装依赖
 
 ```bash
-# 1. 克隆项目
-$ git clone https://github.com/your-name/Worker-TelegramBot.git
-$ cd Worker-TelegramBot
-
-# 2. 安装依赖
-$ npm ci  # 或 npm install
-
-# 3. 配置 Wrangler（首次运行自动生成 wrangler.toml）
-$ npx wrangler init --no-git --yes
-
-# 4. 在 wrangler.toml 或 Dashboard 中填写环境变量
-#    ENV_BOT_TOKEN / ENV_BOT_SECRET
-
-# 5. 本地启动（默认 http://127.0.0.1:8787 ）
-$ npx wrangler dev
+npm install
 ```
 
-> 本地启动后即可在终端看到 `registerWebhook`、`unRegisterWebhook` 等路由信息，后续步骤中将使用到。
+### 3. 配置环境变量
 
----
-
-## 环境变量
-
-| 变量名 | 是否必填 | 含义 |
-| ------ | ------ | ---- |
-| `ENV_BOT_TOKEN` | ✅ | Telegram 机器人 Token |
-| `ENV_BOT_SECRET` | ✅ | 自定义的 Secret Token，用于验证 Webhook 请求 Header |
-
-可在 **wrangler.toml** 中添加：
-
-```toml
-[vars]
-ENV_BOT_TOKEN = "123456:ABC-DEF..."
-ENV_BOT_SECRET = "your_super_secret"
-```
-
-或在 Cloudflare Dashboard → *Workers* → *KV & Environment Variables* 中添加。
-
----
-
-## Webhook 管理
-
-机器人提供以下三个与部署域名同级的 HTTP 路由：
-
-| 路径 | 方法 | 描述 |
-| ---- | ---- | ---- |
-| `/registerWebhook`   | GET | 调用 Telegram `setWebhook`，将 Webhook 指向当前 Worker，并携带 `ENV_BOT_SECRET` 作为验证 Header |
-| `/unRegisterWebhook` | GET | 调用 Telegram `setWebhook` 解除绑定 |
-| `/endpoint`          | POST| Telegram 向此路径推送 Update，所有业务逻辑处理入口 |
-
-### 一键注册 Webhook
-
-在 Worker 启动后访问：
-
-```
-https://<YOUR_WORKER_DOMAIN>/registerWebhook
-```
-
-若返回 `Ok`，说明 Webhook 已成功绑定。
-
-> Telegram 会在每次请求 `/endpoint` 时自动携带 `X-Telegram-Bot-Api-Secret-Token`，Worker 会校验该 Header 与 `ENV_BOT_SECRET` 一致性，拒绝非法访问。
-
----
-
-## 可用命令
-
-| 指令 | 说明 |
-| ---- | ---- |
-| `/start` / `/help` | 查看功能列表 |
-| `/button2` | 发送包含「按钮一 / 按钮二」的两键消息 |
-| `/button4` | 发送包含 4 个按钮（2×2）的多键消息 |
-| `/markdown` | 发送 MarkdownV2 渲染示例 |
-
-任何未知指令都会被机器人识别并以 Markdown 格式提示「未知命令」。
-
----
-
-## 目录结构
-
-```text
-Worker-TelegramBot/
-├─ src/
-│  └─ index.js       # Worker 入口 & Bot 逻辑
-├─ test/             # Vitest 单元测试
-├─ wrangler.jsonc    # Wrangler 配置（JSONC，可注释）
-├─ package.json      # 依赖与脚本
-└─ README.md         # 项目说明
-```
-
----
-
-## 本地开发与调试
+使用 Wrangler 设置敏感信息：
 
 ```bash
-# 热更新模式启动
-$ npx wrangler dev --watch
+# 必需的环境变量
+wrangler secret put BOT_TOKEN          # Telegram Bot Token
+wrangler secret put BOT_SECRET         # Webhook 验证密钥（自定义）
+wrangler secret put AI_API_ENDPOINT    # AI API 地址，如 https://openrouter.ai/api/v1/chat/completions
+wrangler secret put AI_API_KEY         # AI API Key
+
+# 可选的环境变量
+wrangler secret put USER_WHITELIST     # 用户白名单，多个ID用逗号分隔，如 "123456,789012"
+wrangler secret put GROUP_WHITELIST    # 群组白名单，多个ID用逗号分隔，如 "-123456,-789012"
+wrangler secret put AI_SYSTEM_PROMPT   # AI 系统提示词（可选）
 ```
 
-调试建议：
-
-* 使用 `console.log()` 在终端或 Cloudflare Dashboard → *Logs* 中查看实时日志。
-* 通过 `event.waitUntil()` 延迟处理异步逻辑，避免超时。
-* 在本地可直接向 `http://127.0.0.1:8787/registerWebhook` 发送请求，测试注册流程。
-
----
-
-## 单元测试
-
-项目使用 **Vitest**：
+### 4. 部署到 Cloudflare
 
 ```bash
-$ npm run test      # 等价于 npx vitest run
+# 部署到生产环境
+wrangler deploy
+
+# 或者先在本地测试
+wrangler dev
 ```
 
-测试文件位于 `test/`，目前包含基础单元测试示例，可按需扩展覆盖率。
+### 5. 注册 Webhook
 
----
+部署成功后，访问以下 URL 注册 Webhook：
 
-## 故障排查
+```
+https://your-worker-name.workers.dev/registerWebhook
+```
 
-| 现象 | 可能原因 | 解决方案 |
-| ---- | -------- | -------- |
-| Worker 返回 403 | Header `X-Telegram-Bot-Api-Secret-Token` 与 `ENV_BOT_SECRET` 不匹配 | 确认填写一致，重新调用 `/registerWebhook` |
-| Worker 返回 500 | 代码运行异常 | 查看 Cloudflare 日志，定位堆栈并修复 |
-| 机器人无响应 | Webhook 未注册或已失效 | 重新访问 `/registerWebhook` 并确认 Telegram `setWebhook` 返回 `ok true` |
+## 使用方法
 
----
+### 算命功能
+
+1. **直接使用**：发送 `/算命 你的问题`
+2. **回复使用**：回复任意消息，然后发送 `/算命`
+
+Bot 会根据当前时间计算八字，生成卦象，并通过 AI 进行解读。
+
+### 白名单配置
+
+- 如果不设置白名单，所有用户都可以使用
+- 设置 `USER_WHITELIST` 后，只有列表中的用户可以私聊使用
+- 设置 `GROUP_WHITELIST` 后，只有列表中的群组可以使用
+
+获取 ID 的方法：
+1. 使用 [@userinfobot](https://t.me/userinfobot) 获取用户 ID
+2. 将 Bot 加入群组后，查看 Webhook 日志获取群组 ID（通常为负数）
+
+## 项目结构
+
+```
+├── src/
+│   ├── index.js           # 主入口文件
+│   └── utils/
+│       ├── ganzhi.js      # 八字计算模块
+│       ├── hexagram.js    # 卦象生成模块
+│       └── text.js        # 文本处理工具
+├── wrangler.jsonc         # Cloudflare Worker 配置
+└── package.json           # 项目配置
+```
+
+## 开发说明
+
+### 本地开发
+
+```bash
+# 启动本地开发服务器
+wrangler dev
+
+# 使用 ngrok 或类似工具暴露本地端口用于测试 Webhook
+ngrok http 8787
+```
+
+### 查看日志
+
+```bash
+# 实时查看日志
+wrangler tail
+```
+
+### 更新 Webhook
+
+如需更改 Webhook URL，先取消注册旧的：
+
+```
+https://your-worker-name.workers.dev/unRegisterWebhook
+```
+
+然后重新注册新的。
+
+## 注意事项
+
+1. **API 限制**：Cloudflare Worker 有请求时间限制（免费版 10ms CPU 时间），AI 请求可能会超时
+2. **环境变量**：敏感信息必须使用 `wrangler secret` 设置，不要硬编码在代码中
+3. **时区处理**：Bot 自动使用东八区时间计算八字
+4. **群组使用**：在群组中使用时，需要 @ Bot 或回复 Bot 的消息
+
+## 故障排除
+
+1. **Webhook 注册失败**
+   - 检查 BOT_TOKEN 是否正确
+   - 确保 Worker 已正确部署
+
+2. **AI 请求失败**
+   - 检查 AI_API_ENDPOINT 和 AI_API_KEY 是否正确
+   - 确认 API 余额充足
+   - 考虑增加超时时间
+
+3. **权限问题**
+   - 检查白名单配置是否正确
+   - 用户/群组 ID 必须是数字
 
 ## 许可证
 
-本项目基于 **MIT License** 发行，详情见 `LICENSE` 文件。
+MIT
