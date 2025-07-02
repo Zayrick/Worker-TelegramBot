@@ -263,8 +263,8 @@ function onMessage (message) {
     }
 
     return queryAI(prompt)
-      .then(answer => sendPlainText(message.chat.id, answer))
-      .catch(err => sendPlainText(message.chat.id, `AI 请求失败: ${err.message}`))
+      .then(answer => sendMarkdownV2Text(message.chat.id, escapeMarkdown(answer, '`')))
+      .catch(err => sendMarkdownV2Text(message.chat.id, escapeMarkdown(`AI 请求失败: ${err.message}`, '`')))
   }
 
   /* ---------- 群组自动回复 ---------- */
