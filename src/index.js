@@ -48,6 +48,16 @@ function escapeMarkdown (str, except = '') {
 }
 
 /**
+ * @brief 从消息文本中提取不含 @botusername 的纯指令。
+ * @param {string} text - 原始消息文本（如 "/id@MyBot 参数"）
+ * @return {string} 纯指令（如 "/id"），保持原大小写
+ */
+function extractCommand (text) {
+  const firstToken = text.trim().split(' ')[0]
+  return firstToken.split('@')[0]
+}
+
+/**
  * @brief 发送纯文本消息。
  * @param {number|string} chatId - 聊天 ID
  * @param {string} text - 消息文本
@@ -168,11 +178,18 @@ async function onUpdate (update) {
 }
 
 /**
- * @brief 处理文本消息。
+ * @brief 处理文本消息。现支持私聊以及群组(supergroup/group)中带或不带 @botusername 的指令。
  * @param {Object} message - Telegram Message 对象
  */
 function onMessage (message) {
-  if (message.text.startsWith('/start') || message.text.startsWith('/help')) {
+  // 忽略非文本消息
+  if (!message.text) return
+
+  // 提取并标准化指令，统一转为小写便于比较
+  const cmd = extractCommand(message.text).toLowerCase()
+
+  // /start 与 /help 指令
+  if (cmd === '/start' || cmd === '/help') {
     return sendMarkdownV2Text(message.chat.id, '*功能列表:*\n' +
       escapeMarkdown(
         '`/help` - 查看此帮助信息\n' +
@@ -183,24 +200,21 @@ function onMessage (message) {
         '`'))
   }
 
-  if (message.text.startsWith('/button2')) return sendTwoButtons(message.chat.id)
-  if (message.text.startsWith('/button4')) return sendFourButtons(message.chat.id)
-  if (message.text.startsWith('/markdown')) return sendMarkdownExample(message.chat.id)
+  // 示例按钮 / Markdown 指令
+  if (cmd === '/button2') return sendTwoButtons(message.chat.id)
+  if (cmd === '/button4') return sendFourButtons(message.chat.id)
+  if (cmd === '/markdown') return sendMarkdownExample(message.chat.id)
 
-  /**
-   * @brief 处理 /id 指令，根据聊天类型返回用户 ID 或群组 ID。
-   *  - 在私聊（private）中返回当前用户 ID。
-   *  - 在群组（group/supergroup）中返回当前群组 ID。
-   */
-  // /id 命令
-  if (message.text.startsWith('/id') || message.text.startsWith('/ID')) {
+  // /id 指令，根据聊天类型返回
+  if (cmd === '/id') {
     const chatId = message.chat.id
     const prefix = message.chat.type === 'private' ? '你的用户 ID: ' : '本群组 ID: '
     return sendMarkdownV2Text(chatId, escapeMarkdown(`${prefix}\`${chatId}\``, '`'))
   }
 
-  return sendMarkdownV2Text(message.chat.id, escapeMarkdown('*未知命令:* `' + message.text + '`\n' +
-    '使用 /help 查看可用命令。', '*`'))
+  // 未知指令回退
+  return sendMarkdownV2Text(message.chat.id, escapeMarkdown('*未知指令:* `' + message.text + '`\n' +
+    '使用 /help 查看可用指令。', '*`'))
 }
 
 /**
