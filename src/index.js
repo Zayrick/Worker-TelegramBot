@@ -223,7 +223,11 @@ ${cstTime.getFullYear()}年${String(cstTime.getMonth() + 1).padStart(2, '0')}月
 async function handleMessage(message) {
   const chatId = message.chat.id;
   const chatType = message.chat.type;
-  const text = message.text || '';
+  // 如果不是文本／带 caption 的消息则忽略
+  if (!('text' in message) || message.text == null) {
+    return;
+  }
+  const text = message.text;
 
   console.log(`收到消息: chatId=${chatId}, chatType=${chatType}, text="${text}"`);
 
@@ -255,17 +259,20 @@ async function handleMessage(message) {
 
 // 处理回调查询
 async function handleCallbackQuery(callbackQuery) {
-  const chatId = callbackQuery.message.chat.id;
-  const chatType = callbackQuery.message.chat.type;
+  const chatId = callbackQuery.message?.chat?.id;
+  const chatType = callbackQuery.message?.chat?.type;
   const callbackData = callbackQuery.data;
   const callbackQueryId = callbackQuery.id;
 
-  if (!isAuthorized(chatId, chatType)) {
+  // chatId 为空（例如来自 inline 模式）时跳过权限校验
+  if (chatId && !isAuthorized(chatId, chatType)) {
     await answerCallbackQuery(callbackQueryId, '无权限。');
     return;
   }
 
-  await sendMessage(chatId, `你点击了按钮，数据=${callbackData}`);
+  if (chatId) {
+    await sendMessage(chatId, `你点击了按钮，数据=${callbackData}`);
+  }
   await answerCallbackQuery(callbackQueryId, '收到按钮点击！');
 }
 
@@ -295,8 +302,14 @@ async function handleWebhook(request, env, ctx) {
     return new Response('Unauthorized', { status: 403 });
   }
 
-  // 获取更新
-  const update = await request.json();
+  // JSON 解析过程加入 try/catch，避免畸形请求导致 500
+  let update;
+  try {
+    update = await request.json();
+  } catch (err) {
+    console.warn('Webhook JSON 解析失败:', err);
+    return new Response('Bad Request', { status: 400 });
+  }
   console.log('收到 Telegram Update:', update.update_id);
 
   // 异步处理更新，使用 ctx.waitUntil 保证任务在响应后继续执行
@@ -316,7 +329,9 @@ async function handleWebhook(request, env, ctx) {
 // 注册 Webhook
 async function registerWebhook(request) {
   const url = new URL(request.url);
-  const webhookUrl = `${url.protocol}//${url.host}${CONFIG.WEBHOOK_PATH}`;
+  // 确保 webhookPath 没有结尾斜杠，便于与 host 拼接
+  const webhookPath = CONFIG.WEBHOOK_PATH.replace(/\/$/, '');
+  const webhookUrl = `${url.protocol}//${url.host}${webhookPath}`;
 
   const response = await fetch(apiUrl('setWebhook'), {
     method: 'POST',
@@ -384,7 +399,8 @@ export default {
     initConfig(env);
 
     const url = new URL(request.url);
-    const path = url.pathname;
+    // 移除右侧多余的斜杠，确保 /endpoint 与 /endpoint/ 均可命中
+    const path = url.pathname.replace(/\/$/, '');
 
     // 路由处理
     switch (path) {
