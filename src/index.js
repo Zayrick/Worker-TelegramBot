@@ -23,6 +23,7 @@ const WEBHOOK_PATH = '/endpoint'
 const AI_API_ENDPOINT = ENV_AI_API_ENDPOINT
 const AI_MODEL_NAME = ENV_AI_MODEL_NAME
 const AI_API_KEY = ENV_AI_API_KEY
+const AI_REQUEST_TIMEOUT_MS = 28000 // 28 秒超时，避免触发 Cloudflare Worker 30 秒限制
 // ================================
 
 /**
@@ -263,8 +264,8 @@ function onMessage (message) {
     }
 
     return queryAI(prompt)
-      .then(answer => sendMarkdownV2Text(message.chat.id, escapeMarkdown(answer, '`')))
-      .catch(err => sendMarkdownV2Text(message.chat.id, escapeMarkdown(`AI 请求失败: ${err.message}`, '`')))
+      .then(answer => sendPlainText(message.chat.id, answer))
+      .catch(err => sendPlainText(message.chat.id, `AI 请求失败: ${err.message}`))
   }
 
   /* ---------- 群组自动回复 ---------- */
@@ -374,17 +375,33 @@ async function unRegisterWebhook (_event) {
  * @return {Promise<string>} AI 返回的消息内容
  */
 async function queryAI (prompt) {
-  const resp = await fetch(AI_API_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${AI_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: AI_MODEL_NAME,
-      messages: [{ role: 'user', content: prompt }]
+  // 使用 AbortController 实现超时控制
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS)
+
+  let resp
+  try {
+    resp = await fetch(AI_API_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${AI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: AI_MODEL_NAME,
+        messages: [{ role: 'user', content: prompt }]
+      }),
+      signal: controller.signal
     })
-  })
+  } catch (err) {
+    // 捕获因超时导致的 AbortError
+    if (err.name === 'AbortError') {
+      throw new Error('AI 请求超时')
+    }
+    throw err
+  } finally {
+    clearTimeout(timeoutId)
+  }
 
   if (!resp.ok) {
     throw new Error(`AI API 响应错误: ${resp.status}`)
