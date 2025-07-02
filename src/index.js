@@ -245,16 +245,23 @@ async function onUpdate (update) {
  * @param {Object} message - Telegram Message 对象
  */
 function onMessage (message) {
-  // ---------- 群组自动回复 ----------
+  const isGroup = isGroupChat(message.chat.type)
+  const text = message.text ?? ''
+
+  /* ---------- 群组自动回复 ---------- */
   const groupText = handleGroupMessage(message)
   if (groupText !== null) {
-    // 此处仅示范自动回复，可替换为调用 LLM 中心化处理
+    // 只回 bot_command（/xxx 或 /xxx@BotName）
     return sendPlainText(message.chat.id, groupText)
   }
 
-  /* ---------- 私聊 / 其他命令逻辑 ---------- */
-  const text = message.text ?? ''
+  /* ---------- 非命令的群聊消息，直接忽略 ---------- */
+  if (isGroup && !text.startsWith('/')) {
+    // 既不是 bot_command，也不是 / 开头的文本 -> 无需任何回复
+    return
+  }
 
+  /* ---------- 私聊 / 群聊显式命令 ---------- */
   if (text.startsWith('/start') || text.startsWith('/help')) {
     return sendMarkdownV2Text(message.chat.id, '*功能列表:*\n' +
       escapeMarkdown(
@@ -277,8 +284,12 @@ function onMessage (message) {
     return sendMarkdownV2Text(chatId, escapeMarkdown(`${prefix}\`${chatId}\``, '`'))
   }
 
-  return sendMarkdownV2Text(message.chat.id, escapeMarkdown('*未知命令:* `' + text + '`\n' +
-    '使用 /help 查看可用命令。', '*`'))
+  /* ---------- 未知命令 ---------- */
+  // 只在私聊（或你愿意回应的场景）提示未知命令
+  if (!isGroup) {
+    return sendMarkdownV2Text(message.chat.id, escapeMarkdown('*未知命令:* `' + text + '`\n' +
+      '使用 /help 查看可用命令。', '*`'))
+  }
 }
 
 /**
