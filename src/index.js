@@ -48,16 +48,6 @@ function escapeMarkdown (str, except = '') {
 }
 
 /**
- * @brief 从消息文本中提取不含 @botusername 的纯指令。
- * @param {string} text - 原始消息文本（如 "/id@MyBot 参数"）
- * @return {string} 纯指令（如 "/id"），保持原大小写
- */
-function extractCommand (text) {
-  const firstToken = text.trim().split(' ')[0]
-  return firstToken.split('@')[0]
-}
-
-/**
  * @brief 发送纯文本消息。
  * @param {number|string} chatId - 聊天 ID
  * @param {string} text - 消息文本
@@ -168,6 +158,79 @@ async function sendMarkdownExample (chatId) {
   return sendMarkdownV2Text(chatId, escapeMarkdown('但用户可能会写 ** 与 __，例如 `**粗体**` 和 `__斜体__`', '`'))
 }
 
+// ================================
+// 群组自动回复：工具函数
+// ================================
+
+/**
+ * @brief 判断 chat.type 是否为群组。
+ * @param {string} type - Telegram ChatType
+ * @return {boolean}
+ */
+function isGroupChat (type) {
+  return type === 'group' || type === 'supergroup'
+}
+
+/**
+ * @brief 检测并去除消息中的命令片段 (/cmd 或 /cmd@BotName)。
+ * @param {string} content  原始文本/标题
+ * @param {readonly Object[]|undefined} entities  Telegram 消息实体
+ * @return {{ mentioned: boolean, text: string }}   是否包含命令及净化后的文本
+ */
+function stripMention (content, entities) {
+  if (!entities || entities.length === 0) return { mentioned: false, text: content }
+
+  let mentioned = false
+  let text = content
+
+  for (const ent of entities) {
+    const seg = content.slice(ent.offset, ent.offset + ent.length)
+
+    switch (ent.type) {
+      case 'bot_command': // /cmd 或 /cmd@BotName
+        mentioned = true
+        // 删除整段命令文本，保留参数
+        text = text.replace(seg, '')
+        break
+
+      default:
+        // 其它实体忽略
+        break
+    }
+  }
+
+  return { mentioned, text: text.trim() }
+}
+
+/**
+ * @brief 抽取 Message 内可用文本 (text / caption)。
+ * @param {Object} msg Telegram Message 对象
+ * @return {string}
+ */
+function extractText (msg) {
+  return (msg.text ?? msg.caption ?? '').trim()
+}
+
+/**
+ * @brief 群组消息处理核心入口。若需回复则返回纯文本，否则返回 null。
+ * @param {Object} message Telegram Message 对象
+ * @return {string|null}
+ */
+function handleGroupMessage (message) {
+  // 1) 非群聊直接忽略
+  if (!isGroupChat(message.chat.type)) return null
+
+  // 2) 检测 /command
+  const { mentioned, text } = stripMention(
+    message.text ?? message.caption ?? '',
+    message.entities ?? message.caption_entities
+  )
+
+  if (!mentioned) return null
+  if (!text) return null
+  return text
+}
+
 /**
  * @brief 统一入口：处理 Update 对象。
  * @param {Object} update - Telegram Update 对象
@@ -178,18 +241,21 @@ async function onUpdate (update) {
 }
 
 /**
- * @brief 处理文本消息。现支持私聊以及群组(supergroup/group)中带或不带 @botusername 的指令。
+ * @brief 处理文本消息。
  * @param {Object} message - Telegram Message 对象
  */
 function onMessage (message) {
-  // 忽略非文本消息
-  if (!message.text) return
+  // ---------- 群组自动回复 ----------
+  const groupText = handleGroupMessage(message)
+  if (groupText !== null) {
+    // 此处仅示范自动回复，可替换为调用 LLM 中心化处理
+    return sendPlainText(message.chat.id, groupText)
+  }
 
-  // 提取并标准化指令，统一转为小写便于比较
-  const cmd = extractCommand(message.text).toLowerCase()
+  /* ---------- 私聊 / 其他命令逻辑 ---------- */
+  const text = message.text ?? ''
 
-  // /start 与 /help 指令
-  if (cmd === '/start' || cmd === '/help') {
+  if (text.startsWith('/start') || text.startsWith('/help')) {
     return sendMarkdownV2Text(message.chat.id, '*功能列表:*\n' +
       escapeMarkdown(
         '`/help` - 查看此帮助信息\n' +
@@ -200,21 +266,19 @@ function onMessage (message) {
         '`'))
   }
 
-  // 示例按钮 / Markdown 指令
-  if (cmd === '/button2') return sendTwoButtons(message.chat.id)
-  if (cmd === '/button4') return sendFourButtons(message.chat.id)
-  if (cmd === '/markdown') return sendMarkdownExample(message.chat.id)
+  if (text.startsWith('/button2')) return sendTwoButtons(message.chat.id)
+  if (text.startsWith('/button4')) return sendFourButtons(message.chat.id)
+  if (text.startsWith('/markdown')) return sendMarkdownExample(message.chat.id)
 
-  // /id 指令，根据聊天类型返回
-  if (cmd === '/id') {
+  // /id 命令
+  if (text.startsWith('/id') || text.startsWith('/ID')) {
     const chatId = message.chat.id
     const prefix = message.chat.type === 'private' ? '你的用户 ID: ' : '本群组 ID: '
     return sendMarkdownV2Text(chatId, escapeMarkdown(`${prefix}\`${chatId}\``, '`'))
   }
 
-  // 未知指令回退
-  return sendMarkdownV2Text(message.chat.id, escapeMarkdown('*未知指令:* `' + message.text + '`\n' +
-    '使用 /help 查看可用指令。', '*`'))
+  return sendMarkdownV2Text(message.chat.id, escapeMarkdown('*未知命令:* `' + text + '`\n' +
+    '使用 /help 查看可用命令。', '*`'))
 }
 
 /**
