@@ -161,6 +161,25 @@ async function onMessage (message) {
 }
 
 /**
+ * @brief 编辑已发送的纯文本消息。
+ * @details 利用 Telegram `editMessageText` 接口，将之前发送的占位符消息替换为 AI 生成的占卜解析结果。
+ * @param {number} chatId  聊天 ID。
+ * @param {number} messageId 需要被编辑的消息 ID。
+ * @param {string} text 新的消息文本内容（支持 HTML 格式）。
+ * @return {Promise<object>} Telegram API 返回的 JSON 结果。
+ */
+async function editPlainText (chatId, messageId, text) {
+  const params = {
+    chat_id: chatId,
+    message_id: messageId,
+    text,
+    parse_mode: 'HTML'
+  }
+
+  return (await fetch(apiUrl('editMessageText', params))).json()
+}
+
+/**
  * @brief 处理占卜逻辑
  * @param {string} question 占卜问题
  * @param {number} chatId 聊天ID
@@ -190,11 +209,21 @@ async function processDivination(question, chatId, replyToMessageId, referencedM
   // 5. 组装发给 AI 的提示词
   const userPrompt = `所问之事：${question}\n所得之卦：${hexagram}\n所占之时：${ganzhi}\n所测之刻：${timeStr}`
 
-  // 6. 调用 AI 接口获取解析
+  // 6. 立即发送占位符 🔮
+  const replyToId = referencedMessage ? referencedMessage.message_id : replyToMessageId
+  const placeholderResp = await sendPlainText(chatId, '🔮', replyToId)
+  const placeholderMsgId = placeholderResp?.result?.message_id
+
+  // 7. 调用 AI 接口获取解析
   const aiReply = await callAI(userPrompt)
 
-  // 7. 发送回复（如果有引用消息，则回复引用消息）
-  const replyToId = referencedMessage ? referencedMessage.message_id : replyToMessageId
+  // 8. 替换占位符为 AI 生成内容；若失败则重新发送一条新消息
+  if (placeholderMsgId) {
+    await editPlainText(chatId, placeholderMsgId, aiReply)
+    return placeholderResp
+  }
+
+  // 若发送占位符失败，退化为直接发送 AI 内容
   return sendPlainText(chatId, aiReply, replyToId)
 }
 
