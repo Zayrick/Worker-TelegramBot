@@ -36,12 +36,12 @@
 	 * https://developers.cloudflare.com/workers/configuration/secrets/
 	 *
 	 * 需要通过 wrangler secret put 命令设置的敏感变量:
-	 * - BOT_TOKEN: Telegram Bot Token
-	 * - BOT_SECRET: Webhook 验证密钥
-	 * - AI_API_ENDPOINT: AI API 地址 (如 https://openrouter.ai/api/v1/chat/completions)
-	 * - AI_API_KEY: AI API Key
-	 * - USER_WHITELIST: 用户白名单 (可选)
-	 * - GROUP_WHITELIST: 群组白名单 (可选)
+	 * - ENV_BOT_TOKEN: Telegram Bot Token
+	 * - ENV_BOT_SECRET: Webhook 验证密钥
+	 * - ENV_AI_API_ENDPOINT: AI API 地址 (如 https://openrouter.ai/api/v1/chat/completions)
+	 * - ENV_AI_API_KEY: AI API Key
+	 * - ENV_USER_WHITELIST: 用户白名单 (可选)
+	 * - ENV_GROUP_WHITELIST: 群组白名单 (可选)
 	 */
 
 	/**

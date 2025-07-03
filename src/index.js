@@ -1,5 +1,10 @@
 /**
- * https://github.com/cvzi/telegram-bot-cloudflare
+ * @file index.js
+ * @brief Cloudflare Worker Telegram 占卜机器人入口文件。
+ * @details 参考项目 <https://github.com/cvzi/telegram-bot-cloudflare>，主要职责：
+ *          1. 处理 Telegram Webhook 请求并解析指令；
+ *          2. 调用 AI 接口生成占卜解析；
+ *          3. 向 Telegram 返回格式化消息。
  */
 
 import { getFullBazi } from './utils/ganzhi.js'
@@ -24,7 +29,8 @@ const USER_WHITELIST = ENV_USER_WHITELIST ? ENV_USER_WHITELIST.split(',').map(id
 const GROUP_WHITELIST = ENV_GROUP_WHITELIST ? ENV_GROUP_WHITELIST.split(',').map(id => parseInt(id.trim())) : [] // 群组白名单，用逗号分隔的群组ID
 
 /**
- * Wait for requests to the worker
+ * @brief Cloudflare Worker 入口事件监听器。
+ * @details 监听 <code>fetch</code> 事件，根据请求路径将流量路由至对应的业务处理函数。
  */
 addEventListener('fetch', event => {
   const url = new URL(event.request.url)
@@ -40,8 +46,15 @@ addEventListener('fetch', event => {
 })
 
 /**
- * Handle requests to WEBHOOK
- * https://core.telegram.org/bots/api#update
+ * @brief 处理 Telegram Webhook HTTP 请求。
+ * @details
+ *  1. 校验 <code>X-Telegram-Bot-Api-Secret-Token</code> 头部；
+ *  2. 同步解析请求体为 Update 对象；
+ *  3. 通过 <code>event.waitUntil</code> 异步调用 onUpdate 进一步处理；
+ *  4. 立即返回 <code>Ok</code> 响应，以降低 Telegram 重试概率。
+ * @param {FetchEvent} event Cloudflare Worker Fetch 事件对象。
+ * @return {Response} 处理结果。
+ * @see https://core.telegram.org/bots/api#update
  */
 async function handleWebhook (event) {
   // Check secret
@@ -58,8 +71,9 @@ async function handleWebhook (event) {
 }
 
 /**
- * Handle incoming Update
- * https://core.telegram.org/bots/api#update
+ * @brief 按 Update 类型进行分派（目前仅处理 <code>message</code> 类型）。
+ * @param {object} update Telegram Update 对象。
+ * @return {Promise<void>} 无返回值，异步执行。
  */
 async function onUpdate (update) {
   if ('message' in update) {
@@ -238,8 +252,12 @@ async function processDivination(question, chatId, replyToMessageId, referencedM
 }
 
 /**
- * Send plain text message
- * https://core.telegram.org/bots/api#sendmessage
+ * @brief 发送纯文本消息到 Telegram。
+ * @param {number} chatId 聊天 ID。
+ * @param {string} text 需要发送的消息文本（支持 HTML 标签）。
+ * @param {?number} [replyToMessageId=null] 可选，被回复的消息 ID。
+ * @return {Promise<object>} Telegram API 返回的 JSON 对象。
+ * @see https://core.telegram.org/bots/api#sendmessage
  */
 async function sendPlainText (chatId, text, replyToMessageId = null) {
   const params = {
@@ -257,8 +275,13 @@ async function sendPlainText (chatId, text, replyToMessageId = null) {
 }
 
 /**
- * Set webhook to this worker's url
- * https://core.telegram.org/bots/api#setwebhook
+ * @brief 为当前 Worker 设置 Webhook。
+ * @param {FetchEvent} event Fetch 事件对象。
+ * @param {URL} requestUrl Worker 自身访问 URL。
+ * @param {string} suffix Webhook 路径。
+ * @param {string} secret Secret Token，用于验证请求来源。
+ * @return {Response} 设置结果。
+ * @see https://core.telegram.org/bots/api#setwebhook
  */
 async function registerWebhook (event, requestUrl, suffix, secret) {
   // https://core.telegram.org/bots/api#setwebhook
@@ -268,8 +291,10 @@ async function registerWebhook (event, requestUrl, suffix, secret) {
 }
 
 /**
- * Remove webhook
- * https://core.telegram.org/bots/api#setwebhook
+ * @brief 删除当前 Worker 的 Webhook。
+ * @param {FetchEvent} event Fetch 事件对象。
+ * @return {Response} 取消结果。
+ * @see https://core.telegram.org/bots/api#setwebhook
  */
 async function unRegisterWebhook (event) {
   const r = await (await fetch(apiUrl('setWebhook', { url: '' }))).json()
@@ -277,7 +302,10 @@ async function unRegisterWebhook (event) {
 }
 
 /**
- * Return url to telegram api, optionally with parameters added
+ * @brief 构造 Telegram Bot API 调用 URL。
+ * @param {string} methodName Telegram API 方法名。
+ * @param {?object} [params=null] 可选，附加的查询参数对象。
+ * @return {string} 完整的请求 URL。
  */
 function apiUrl (methodName, params = null) {
   let query = ''

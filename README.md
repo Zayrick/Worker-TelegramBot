@@ -1,153 +1,212 @@
 # Telegram 占卜机器人
 
-这是一个基于 Cloudflare Workers 的 Telegram 占卜机器人，集成了 AI 聊天功能，可以进行小六壬占卜预测。
+> 基于 **Cloudflare Workers** 与 **Telegram Bot API** 构建的无服务器（Serverless）占卜机器人，结合 **小六壬** 传统算法与 **AI 大语言模型** 。
 
-## 功能特性
+## 项目亮点
 
-- 🔮 **小六壬占卜**：基于时辰、干支四柱生成卦象，结合 AI 提供专业占卜解读
-- 🤖 **AI 智能解读**：集成多种 AI 模型，提供准确的占卜结果分析
-- 🛡️ **白名单控制**：支持用户白名单和群组白名单，确保使用权限管理
-- 💬 **命令触发**：通过 `/sm` 命令触发占卜，避免误触发
-- 🔗 **消息引用**：支持引用他人消息进行占卜分析
-- 📊 **ID 查询**：通过 `/id` 命令查看用户和群组ID，便于设置白名单
+| 功能               | 说明                                                                                 |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| 🔮 小六壬占卜      | 基于干支四柱随机生成卦象，并结合 AI 提供专业解读                                         |
+| 🤖 AI 智能分析     | 兼容 OpenAI / OpenRouter 等 Chat Completion 接口，支持多模型切换                         |
+| 🛡️ 白名单控制      | 内置用户白名单 / 群组白名单，轻松实现权限管理                                           |
+| 💬 命令交互        | 支持 `/sm`（占卜）、`/id`（查询 ID）等指令，避免群聊刷屏                                |
+| 🔗 消息引用        | 群聊中可引用他人消息后发送 `/sm`，直接对引用内容进行解析                                |
+| ⚡ Serverless 架构  | 基于 Cloudflare Workers，零服务器运维成本，自动弹性伸缩                                 |
 
-## 使用说明
+---
 
-### 基本命令
+## 架构概览
 
-1. **占卜命令**：`/sm 您的问题`
-   - 例如：`/sm 今天的运势如何？`
-   - 例如：`/sm 这次投资会成功吗？`
+```mermaid
+flowchart TD
+    用户--HTTP-->Cloudflare_Worker
+    Cloudflare_Worker--Webhook-->Telegram_API
+    Cloudflare_Worker--HTTPS-->AI_API[AI Chat Completion API]
+    Cloudflare_Worker--计算-->占卜算法
+    subgraph Cloudflare_Worker
+        占卜算法[getFullBazi / generateHexagram]
+    end
+```
 
-2. **查看ID**：`/id`
-   - 显示当前用户ID和聊天ID，用于配置白名单
+---
 
-3. **引用占卜**：回复某条消息并发送 `/sm`
-   - 机器人会对被引用的消息内容进行占卜分析
-   - 回复时会引用原消息
+## 快速开始
 
-### 使用场景
+### 1. 前置条件
 
-- **私聊**：必须使用 `/sm` 命令才能触发占卜
-- **群聊**：只有使用 `/sm` 命令才会响应，避免干扰群聊
-- **引用占卜**：在群聊中引用他人消息，然后发送 `/sm` 进行分析
-
-### 1. 获取机器人 TOKEN 和 SECRET
-
-1. **从 BotFather 获取 Token：**
-   - 在 Telegram 中搜索 `@BotFather`。
-   - 开始对话并发送 `/newbot` 命令。
-   - 按照提示为你的机器人命名和设置用户名。
-   - BotFather 将提供一个形如 `123456:ABC-DEF1234ghIkl-zyx57W2v1u123er1` 的 TOKEN。请妥善保管此 TOKEN。
-
-2. **生成 Secret Token：**
-   - `SECRET` 是一个自定义的字符串，用于验证 Telegram 发送给你的 Webhook 请求。它可以是任何字母、数字、下划线和连字符的组合。
-   - 建议使用一个随机且足够长的字符串作为 `SECRET`，例如 `your-super-secret-token-123`。
-
-### 2. 配置环境变量
-
-你需要配置以下环境变量（通过 `wrangler secret put` 命令设置）：
-
-#### 必需变量：
-- `ENV_BOT_TOKEN`: 从 BotFather 获取的机器人 TOKEN
-- `ENV_BOT_SECRET`: 自定义的 Webhook 验证密钥
-- `ENV_AI_API_ENDPOINT`: AI API 地址（如 `https://openrouter.ai/api/v1/chat/completions`）
-- `ENV_AI_API_KEY`: AI API 密钥
-
-#### 可选变量：
-- `ENV_USER_WHITELIST`: 用户白名单，用逗号分隔的用户ID（如 `123456,789012`）
-- `ENV_GROUP_WHITELIST`: 群组白名单，用逗号分隔的群组ID（如 `-1001234567,-1009876543`）
-
-#### 设置环境变量示例：
+* Node.js ≥ 18
+* npm ≥ 9
+* 安装 [`wrangler`](https://developers.cloudflare.com/workers/wrangler/)：
 
 ```bash
-# 设置必需变量
+npm i -g wrangler
+```
+
+### 2. 克隆项目
+
+```bash
+git clone https://github.com/your-username/telegram-worker-bot.git
+cd telegram-worker-bot
+npm install
+```
+
+### 3. 配置环境变量
+
+本项目 **必须** 配置以下 4 个核心环境变量，另有 2 个白名单可选：
+
+| 变量名                 | 必需 | 示例值                                               | 说明                                   |
+| ---------------------- | ---- | ---------------------------------------------------- | -------------------------------------- |
+| `ENV_BOT_TOKEN`        | ✅   | `123456:ABC-DEF1234ghIkl-zyx57W2v1u123er1`           | BotFather 生成的 Bot Token            |
+| `ENV_BOT_SECRET`       | ✅   | `your-super-secret-token-123`                        | 自定义，用于校验 Telegram Webhook      |
+| `ENV_AI_API_ENDPOINT`  | ✅   | `https://openrouter.ai/api/v1/chat/completions`      | AI 聊天接口地址                        |
+| `ENV_AI_API_KEY`       | ✅   | `sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`           | AI Key                                 |
+| `ENV_USER_WHITELIST`   | ⬜   | `123456,789012`                                     | 用户白名单，多 ID 逗号分隔             |
+| `ENV_GROUP_WHITELIST`  | ⬜   | `-1001234567,-1009876543`                            | 群组白名单（群组 ID 为负数）           |
+
+使用 `wrangler secret put <ENV_NAME>` 将变量写入 Cloudflare Worker：
+
+```bash
 wrangler secret put ENV_BOT_TOKEN
 wrangler secret put ENV_BOT_SECRET
 wrangler secret put ENV_AI_API_ENDPOINT
 wrangler secret put ENV_AI_API_KEY
 
-# 设置可选的白名单变量
+# 可选白名单
 wrangler secret put ENV_USER_WHITELIST
 wrangler secret put ENV_GROUP_WHITELIST
 ```
 
-### 3. 白名单配置
+### 4. 本地预览（可选）
 
-#### 获取ID信息：
-1. 将机器人添加到群组或私聊
-2. 发送 `/id` 命令查看用户ID和聊天ID
-3. 将需要的ID添加到相应的白名单环境变量中
+```bash
+wrangler dev --inspect --local
+```
 
-#### 白名单规则：
-- 如果未设置白名单，机器人对所有用户开放
-- 用户白名单：允许指定用户在任何地方使用机器人
-- 群组白名单：允许在指定群组中使用机器人（群组ID通常为负数）
-- 用户在白名单中的用户可以在私聊中使用，群组在白名单中的可以在该群组中使用
+---
 
-### 4. 部署 Cloudflare Worker
+## 本地开发
 
-本项目使用 `wrangler` 工具进行部署。请确保你已安装 `npm` 和 `wrangler`。
+1. **代码风格**：项目使用 **ESLint + Prettier**（未集成请按需配置）。
+2. **注释规范**：全部采用 **Doxygen + 中文注释**，便于企业级代码审计。
+3. **单元测试**：使用 [Vitest](https://vitest.dev/)（见下文测试章节）。
 
-1. **安装依赖：**
-   ```bash
-   npm install
-   ```
+修改代码后，通过下列命令运行测试：
 
-2. **部署 Worker：**
-   ```bash
-   npx wrangler deploy
-   ```
-   `wrangler` 会根据 `wrangler.jsonc` 文件中的配置将 Worker 部署到你的 Cloudflare 账户。
+```bash
+npm run test
+```
 
-### 5. 注册 Webhook
+---
 
-部署成功后，你需要将 Telegram 机器人的 Webhook 地址设置为你的 Worker URL。你可以通过访问 Worker 的特定路径来完成此操作。
+## 部署到 Cloudflare
 
-打开你的浏览器，访问以下 URL：
+```bash
+# 首次部署
+npx wrangler deploy
+
+# 更新部署
+npx wrangler deploy --minify
+```
+
+部署成功后，`wrangler` 会输出类似：
+
+```
+✨  Built successfully, built project size is 23 KiB.
+✨  Successfully published your script to:
+  https://my-bot.your-username.workers.dev
+```
+
+将此 URL 记为 `YOUR_WORKER_URL`，后续注册 Webhook 使用。
+
+---
+
+## Webhook 注册 / 取消
+
+注册 Webhook（自动调用 `setWebhook`）：
 
 ```
 https://YOUR_WORKER_URL/registerWebhook
 ```
 
-将 `YOUR_WORKER_URL` 替换为你的 Cloudflare Worker 的实际 URL。例如，如果你的 Worker URL 是 `https://my-bot.your-username.workers.dev`，那么访问：
-
-```
-https://my-bot.your-username.workers.dev/registerWebhook
-```
-
-如果一切顺利，页面将显示 "Ok"。这表示 Webhook 已成功注册。
-
-### 6. 测试机器人
-
-现在，你的 Telegram 占卜机器人应该已经可以正常工作了！
-
-#### 测试步骤：
-1. 在 Telegram 中找到你的机器人
-2. 发送 `/id` 查看ID信息
-3. 发送 `/sm 今天运势如何？` 进行占卜测试
-4. 在群聊中测试引用消息占卜功能
-
-### 7. （可选）取消注册 Webhook
-
-如果你需要取消注册 Webhook，可以访问以下 URL：
+取消 Webhook：
 
 ```
 https://YOUR_WORKER_URL/unRegisterWebhook
 ```
 
-将 `YOUR_WORKER_URL` 替换为你的 Cloudflare Worker 的实际 URL。
+---
 
-## 技术架构
+## 测试
 
-- **后端**：Cloudflare Workers（无服务器）
-- **占卜算法**：基于干支历法和小六壬系统
-- **AI 集成**：支持 OpenAI 兼容的 API 接口
-- **消息处理**：Telegram Bot API Webhook 模式
+```bash
+# 运行所有测试（Vitest）
+npm run test
+```
 
-## 注意事项
+测试覆盖：
 
-1. **API 费用**：使用 AI 接口可能产生费用，请合理控制使用量
-2. **白名单管理**：建议设置白名单避免滥用
-3. **隐私保护**：机器人不会存储用户消息，但会发送给 AI 服务商
-4. **群组使用**：在群组中使用时请确保符合群组规则
+* 干支四柱计算 `src/utils/ganzhi.js`
+* 卦象随机生成 `src/utils/hexagram.js`
+* 消息处理流程 `src/index.js`
+
+---
+
+## 常见问题
+
+<details>
+<summary>Bot 没有响应 /sm 命令？</summary>
+1. 确认已正确设置 Webhook。
+2. 检查 `ENV_BOT_SECRET` 是否与注册时一致。
+3. 确认用户 / 群组在白名单内（或未配置白名单）。
+</details>
+
+<details>
+<summary>AI 接口报错或超时？</summary>
+1. 检查 `ENV_AI_API_ENDPOINT` 是否可访问。
+2. 关注调用额度 / 余额。
+3. 考虑降低并发或更换模型。
+</details>
+
+---
+
+## 项目结构
+
+```text
+telegram-worker-bot/
+├── src/                # 业务源码
+│   ├── index.js        # 主入口（Worker）
+│   └── utils/          # 占卜工具函数
+│       ├── ganzhi.js   # 干支四柱相关
+│       └── hexagram.js # 卦象生成
+├── test/               # 单元测试
+├── vitest.config.js    # 测试配置
+├── wrangler.jsonc      # Cloudflare Workers 配置
+└── README.md           # 项目说明
+```
+
+---
+
+## 贡献指南
+
+欢迎大家提交 **Issue** 与 **PR**！在开始贡献之前，请确保：
+
+1. Fork 仓库并创建分支：`git checkout -b feature/your-feature`。
+2. 遵循代码注释与格式规范，保证单元测试通过。
+3. 提交前运行 `npm run test` 与静态检查。
+4. 在 PR 描述中清晰说明变更动机与实现细节。
+
+---
+
+## License
+
+[MIT](LICENSE)
+
+---
+
+## 致谢
+
+* [Cloudflare Workers](https://workers.cloudflare.com/)
+* [Telegram Bot API](https://core.telegram.org/bots/api)
+* [OpenRouter](https://openrouter.ai/) / OpenAI
+
+> 如果本项目对你有所帮助，欢迎 ⭐Star 支持！
