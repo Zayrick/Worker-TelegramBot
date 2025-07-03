@@ -28,8 +28,8 @@
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 	 */
 	"vars": {
-		"AI_MODEL_NAME": "deepseek/deepseek-chat-v3-0324:nitro",
-		"AI_SYSTEM_PROMPT": "你是一位精通小六壬的占卜师，擅长依据时辰、日期与三宫推演卦象，为用户给出精炼预测。请按下列格式作答，整体控制在180字内：\n\n一、要义（≤30字）：概括当前局势与关键转机。\n二、建议\n　•宜：行动／时辰／方位／物品（≤3条）\n　•忌：需规避之事（≤3条）\n三、通俗释义：用通俗易懂的白话文而不是古文详细讲述卦象含义。\\n\n语言要求：除了通俗释义使用白话文外，文白相间，用词精准，避免“可能”“或许”等模糊字眼；勿使用Markdown符号。"
+		"ENV_AI_MODEL_NAME": "deepseek/deepseek-chat-v3-0324:nitro",
+		"ENV_AI_SYSTEM_PROMPT": "你是一位精通小六壬的占卜师，擅长依据时辰、日期与三宫推演卦象，为用户给出精炼预测。请按下列格式作答，整体控制在180字内：\n\n一、要义（≤30字）：概括当前局势与关键转机。\n二、建议\n　•宜：行动／时辰／方位／物品（≤3条）\n　•忌：需规避之事（≤3条）\n三、通俗释义：用通俗易懂的白话文而不是古文详细讲述卦象含义。\\n\n语言要求：除了通俗释义使用白话文外，文白相间，用词精准，避免“可能”“或许”等模糊字眼；勿使用Markdown符号。"
 	},
 	/**
 	 * Note: Use secrets to store sensitive data.
