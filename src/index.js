@@ -111,7 +111,8 @@ async function onMessage (message) {
 async function sendPlainText (chatId, text) {
   return (await fetch(apiUrl('sendMessage', {
     chat_id: chatId,
-    text
+    text,
+    parse_mode: 'HTML'
   }))).json()
 }
 
@@ -184,7 +185,9 @@ async function callAI (userPrompt) {
 
   // 按 OpenAI 兼容格式解析
   if (data.choices && data.choices.length > 0 && data.choices[0].message) {
-    return data.choices[0].message.content.trim()
+    const aiContent = data.choices[0].message.content.trim()
+    // 使用 HTML 格式化 AI 返回的内容
+    return `<blockquote>${aiContent}</blockquote>`
   }
 
   return '抱歉，AI 未能给出有效回复。'
