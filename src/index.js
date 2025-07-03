@@ -87,7 +87,7 @@ function onMessage (message) {
                   `${beijingTime.getHours().toString().padStart(2, '0')}:${beijingTime.getMinutes().toString().padStart(2, '0')}`
 
   // 6. 组合最终回复
-  const reply = `所问之事：${question}\n所得之卦：${hexagram}\n所占之时：${ganzhi}\n${timeStr}`
+  const reply = `所问之事：${question}\n所得之卦：${hexagram}\n所占之时：${ganzhi}\n所测之刻：${timeStr}`
 
   return sendPlainText(message.chat.id, reply)
 }
