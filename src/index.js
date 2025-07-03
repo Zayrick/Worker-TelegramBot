@@ -109,24 +109,31 @@ function isWhitelisted(userId, chatId) {
 async function onMessage (message) {
   const userId = message.from.id
   const chatId = message.chat.id
-  const messageText = message.text || ''
+  /**
+   * @brief 原始消息文本，去除首尾空白字符。
+   * @details 同时生成小写版本 messageTextLower，便于大小写无关匹配；
+   *          isCommand 用于快速判断该消息是否以 '/' 开头，为命令形式。
+   */
+  const messageText = (message.text || '').trim()
+  const messageTextLower = messageText.toLowerCase()
+  const isCommand = messageText.startsWith('/')
 
   // 1. 检查白名单权限
   if (!isWhitelisted(userId, chatId)) {
     return // 不在白名单中，直接忽略
   }
 
-  // 2. 解析命令
+  // 2. 解析命令相关属性
   const isGroup = chatId < 0 // 负数表示群聊
 
-  // 处理 /id 命令
-  if (messageText.startsWith('/id')) {
+  // 处理 /id（大小写不敏感）命令
+  if (isCommand && messageTextLower.startsWith('/id')) {
     const idInfo = `用户ID: <code>${userId}</code>\n聊天ID: <code>${chatId}</code>`
     return sendPlainText(chatId, idInfo, message.message_id)
   }
 
-  // 处理 /sm 命令
-  if (messageText.startsWith('/sm')) {
+  // 处理 /sm（大小写不敏感）或 /算命 命令
+  if (isCommand && (messageTextLower.startsWith('/sm') || messageText.startsWith('/算命'))) {
     // 提取命令后的问题内容
     let question = messageText.substring(3).trim()
 
@@ -149,15 +156,18 @@ async function onMessage (message) {
     return await processDivination(question, chatId, message.message_id, referencedMessage)
   }
 
-  // 对于群聊，如果不是 /sm 命令，则忽略
-  if (isGroup) {
-    return
+  // 3. 未知指令处理：所有未被识别的命令统一提示
+  if (isCommand) {
+    return sendPlainText(chatId, '未知指令，请检查后重试。\n当前支持的指令：/sm（/算命）、/id', message.message_id)
   }
 
-  // 对于私聊，如果不是命令，提示用户使用正确命令
-  if (!messageText.startsWith('/')) {
-    return sendPlainText(chatId, '请使用 /sm 命令来进行占卜，例如：/sm 今天运势如何？\n使用 /id 查看您的用户ID', message.message_id)
+  // 4. 非指令消息：群聊忽略，私聊提示正确用法
+  if (isGroup) {
+    return // 群聊中非指令消息直接忽略，避免打扰
   }
+
+  // 私聊且非指令，提示用户可用命令
+  return sendPlainText(chatId, '请使用 /sm 命令来进行占卜，例如：/sm 今天运势如何？\n或使用 /算命 作为中文别名。\n使用 /id 查看您的用户ID', message.message_id)
 }
 
 /**
