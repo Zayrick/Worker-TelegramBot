@@ -1,148 +1,78 @@
-# Telegram Bot on Cloudflare Worker
+# Telegram 工作机器人
 
-这是一个运行在 Cloudflare Worker 上的 Telegram Bot，支持算命功能。
+这是一个基于 Cloudflare Workers 的 Telegram 机器人，实现了基本的 webhook 消息处理和回显功能。
 
-## 功能特点
+## 使用说明
 
-- 🔮 支持 `/算命` 命令，结合八字和卦象进行占卜
-- 🤖 集成 AI 对话功能（支持 OpenAI 兼容的 API）
-- 🔐 支持用户和群组白名单
-- ⚡ 基于 Cloudflare Worker，无服务器架构
-- 🌏 自动计算东八区时间的八字
+### 1. 获取机器人 TOKEN 和 SECRET
 
-## 部署步骤
+1. **从 BotFather 获取 Token：**
+   - 在 Telegram 中搜索 `@BotFather`。
+   - 开始对话并发送 `/newbot` 命令。
+   - 按照提示为你的机器人命名和设置用户名。
+   - BotFather 将提供一个形如 `123456:ABC-DEF1234ghIkl-zyx57W2v1u123er1` 的 TOKEN。请妥善保管此 TOKEN。
 
-### 1. 前置要求
+2. **生成 Secret Token：**
+   - `SECRET` 是一个自定义的字符串，用于验证 Telegram 发送给你的 Webhook 请求。它可以是任何字母、数字、下划线和连字符的组合。
+   - 建议使用一个随机且足够长的字符串作为 `SECRET`，例如 `your-super-secret-token-123`。
 
-- 安装 [Node.js](https://nodejs.org/) (v16 或更高版本)
-- 安装 [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
-- 拥有 Cloudflare 账号
-- 已创建 Telegram Bot（通过 [@BotFather](https://t.me/botfather)）
+### 2. 配置环境变量
 
-### 2. 安装依赖
+你需要将获取到的 `TOKEN` 和 `SECRET` 配置为 Cloudflare Worker 的环境变量。
 
-```bash
-npm install
-```
+1. 登录 Cloudflare 控制台。
+2. 导航到你的 Workers & Pages 项目。
+3. 选择你的 Worker 应用程序。
+4. 进入 "设置" -> "变量" 页面。
+5. 添加两个环境变量：
+   - `ENV_BOT_TOKEN`: 值为你从 BotFather 获取的机器人 TOKEN。
+   - `ENV_BOT_SECRET`: 值为你自定义的 Secret Token。
 
-### 3. 配置环境变量
+### 3. 部署 Cloudflare Worker
 
-使用 Wrangler 设置敏感信息：
+本项目使用 `wrangler` 工具进行部署。请确保你已安装 `npm` 和 `wrangler`。
 
-```bash
-# 必需的环境变量
-wrangler secret put BOT_TOKEN          # Telegram Bot Token
-wrangler secret put BOT_SECRET         # Webhook 验证密钥（自定义）
-wrangler secret put AI_API_ENDPOINT    # AI API 地址，如 https://openrouter.ai/api/v1/chat/completions
-wrangler secret put AI_API_KEY         # AI API Key
+1. **安装依赖：**
+   ```bash
+   npm install
+   ```
 
-# 可选的环境变量
-wrangler secret put USER_WHITELIST     # 用户白名单，多个ID用逗号分隔，如 "123456,789012"
-wrangler secret put GROUP_WHITELIST    # 群组白名单，多个ID用逗号分隔，如 "-123456,-789012"
-wrangler secret put AI_SYSTEM_PROMPT   # AI 系统提示词（可选）
-```
+2. **部署 Worker：**
+   ```bash
+   npx wrangler deploy
+   ```
+   `wrangler` 会根据 `wrangler.jsonc` 文件中的配置将 Worker 部署到你的 Cloudflare 账户。
 
-### 4. 部署到 Cloudflare
+### 4. 注册 Webhook
 
-```bash
-# 部署到生产环境
-wrangler deploy
+部署成功后，你需要将 Telegram 机器人的 Webhook 地址设置为你的 Worker URL。你可以通过访问 Worker 的特定路径来完成此操作。
 
-# 或者先在本地测试
-wrangler dev
-```
-
-### 5. 注册 Webhook
-
-部署成功后，访问以下 URL 注册 Webhook：
+打开你的浏览器，访问以下 URL：
 
 ```
-https://your-worker-name.workers.dev/registerWebhook
+https://YOUR_WORKER_URL/registerWebhook
 ```
 
-## 使用方法
-
-### 算命功能
-
-1. **直接使用**：发送 `/算命 你的问题`
-2. **回复使用**：回复任意消息，然后发送 `/算命`
-
-Bot 会根据当前时间计算八字，生成卦象，并通过 AI 进行解读。
-
-### 白名单配置
-
-- 如果不设置白名单，所有用户都可以使用
-- 设置 `USER_WHITELIST` 后，只有列表中的用户可以私聊使用
-- 设置 `GROUP_WHITELIST` 后，只有列表中的群组可以使用
-
-获取 ID 的方法：
-1. 使用 [@userinfobot](https://t.me/userinfobot) 获取用户 ID
-2. 将 Bot 加入群组后，查看 Webhook 日志获取群组 ID（通常为负数）
-
-## 项目结构
+将 `YOUR_WORKER_URL` 替换为你的 Cloudflare Worker 的实际 URL。例如，如果你的 Worker URL 是 `https://my-bot.your-username.workers.dev`，那么访问：
 
 ```
-├── src/
-│   ├── index.js           # 主入口文件
-│   └── utils/
-│       ├── ganzhi.js      # 八字计算模块
-│       ├── hexagram.js    # 卦象生成模块
-│       └── text.js        # 文本处理工具
-├── wrangler.jsonc         # Cloudflare Worker 配置
-└── package.json           # 项目配置
+https://my-bot.your-username.workers.dev/registerWebhook
 ```
 
-## 开发说明
+如果一切顺利，页面将显示 "Ok"。这表示 Webhook 已成功注册。
 
-### 本地开发
+### 5. 测试机器人
 
-```bash
-# 启动本地开发服务器
-wrangler dev
+现在，你的 Telegram 机器人应该已经可以正常工作了！
 
-# 使用 ngrok 或类似工具暴露本地端口用于测试 Webhook
-ngrok http 8787
-```
+在 Telegram 中向你的机器人发送任何消息，它将回复你发送的内容（回显功能）。
 
-### 查看日志
+### 6. （可选）取消注册 Webhook
 
-```bash
-# 实时查看日志
-wrangler tail
-```
-
-### 更新 Webhook
-
-如需更改 Webhook URL，先取消注册旧的：
+如果你需要取消注册 Webhook，可以访问以下 URL：
 
 ```
-https://your-worker-name.workers.dev/unRegisterWebhook
+https://YOUR_WORKER_URL/unRegisterWebhook
 ```
 
-然后重新注册新的。
-
-## 注意事项
-
-1. **API 限制**：Cloudflare Worker 有请求时间限制（免费版 10ms CPU 时间），AI 请求可能会超时
-2. **环境变量**：敏感信息必须使用 `wrangler secret` 设置，不要硬编码在代码中
-3. **时区处理**：Bot 自动使用东八区时间计算八字
-4. **群组使用**：在群组中使用时，需要 @ Bot 或回复 Bot 的消息
-
-## 故障排除
-
-1. **Webhook 注册失败**
-   - 检查 BOT_TOKEN 是否正确
-   - 确保 Worker 已正确部署
-
-2. **AI 请求失败**
-   - 检查 AI_API_ENDPOINT 和 AI_API_KEY 是否正确
-   - 确认 API 余额充足
-   - 考虑增加超时时间
-
-3. **权限问题**
-   - 检查白名单配置是否正确
-   - 用户/群组 ID 必须是数字
-
-## 许可证
-
-MIT
+将 `YOUR_WORKER_URL` 替换为你的 Cloudflare Worker 的实际 URL。
