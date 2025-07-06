@@ -180,7 +180,7 @@ async function onMessage (message) {
 
   // 处理 /id 命令
   if (isCommand && commandBaseLower === '/id') {
-    const idInfo = `用户ID: <code>${userId}</code>\n聊天ID: <code>${chatId}</code>`
+    const idInfo = `用户ID: <code>${userId}</code>\n群组ID: <code>${chatId}</code>`
     return sendPlainText(chatId, idInfo, message.message_id)
   }
 
@@ -202,7 +202,7 @@ async function onMessage (message) {
 
     // 如果没有问题内容，提示用户
     if (!question) {
-      return sendPlainText(chatId, '请在命令后输入您的问题，例如：/sm 今天运势如何？', message.message_id)
+      return sendPlainText(chatId, '使用方法：\n1. 直接发送 /sm 问题，例如：/sm 今天运势如何？\n2. 群聊中可先引用消息后发送 /sm，对引用内容进行占卜。\n', message.message_id)
     }
 
     // 进行占卜处理
