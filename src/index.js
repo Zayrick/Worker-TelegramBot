@@ -180,7 +180,10 @@ async function onMessage (message) {
 
   // 处理 /id 命令
   if (isCommand && commandBaseLower === '/id') {
-    const idInfo = `用户ID: <code>${userId}</code>\n群组ID: <code>${chatId}</code>`
+    // 私聊场景（userId === chatId）仅展示用户ID；群聊场景同时展示群组ID
+    const idInfo = (userId === chatId)
+      ? `用户ID: <code>${userId}</code>`
+      : `用户ID: <code>${userId}</code>\n群组ID: <code>${chatId}</code>`
     return sendPlainText(chatId, idInfo, message.message_id)
   }
 
