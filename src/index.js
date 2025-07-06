@@ -72,6 +72,10 @@ addEventListener('fetch', event => {
  * @see https://core.telegram.org/bots/api#update
  */
 async function handleWebhook (event) {
+  // 仅允许 POST 方法，其余请求返回 405
+  if (event.request.method !== 'POST') {
+    return new Response('Method Not Allowed', { status: 405 })
+  }
   // Check secret
   if (event.request.headers.get('X-Telegram-Bot-Api-Secret-Token') !== SECRET) {
     return new Response('Unauthorized', { status: 403 })
@@ -249,12 +253,9 @@ async function processDivination(question, chatId, replyToMessageId, referencedM
   // 2. 计算干支四柱
   const ganzhi = getFullBazi(beijingTime)
 
-  // 3. 随机生成卦象（三个词语）
-  const hexagram = generateHexagram([
-    Math.floor(Math.random() * 100) + 1,
-    Math.floor(Math.random() * 100) + 1,
-    Math.floor(Math.random() * 100) + 1
-  ])
+  // 3. 随机生成卦象（三个词语），使用加密安全随机数避免可预测性
+  const randomArray = crypto.getRandomValues(new Uint32Array(3))
+  const hexagram = generateHexagram(Array.from(randomArray, n => (n % 6) + 1))
 
   // 4. 格式化东八区时间字符串
   const timeStr = `${beijingTime.getFullYear()}年${beijingTime.getMonth() + 1}月${beijingTime.getDate()}日 ` +
