@@ -56,7 +56,7 @@ addEventListener('fetch', event => {
     event.respondWith(unRegisterWebhook(event))
   } else {
     // 所有未在白名单中的路径统一返回 404
-    event.respondWith(new Response({ status: 404 }))
+    event.respondWith(new Response(null, { status: 404 }))
   }
 })
 
