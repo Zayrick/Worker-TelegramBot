@@ -1,8 +1,14 @@
-import { getFullBazi } from '../utils/ganzhi.js'
+import { Lunar } from 'lunar-javascript'
 import { generateHexagram } from '../utils/hexagram.js'
 import { sendPlainText, editPlainText } from '../services/telegram.js'
 import { callAI } from '../services/ai.js'
 import { BOT_USERNAME, USER_WHITELIST, GROUP_WHITELIST } from '../config.js'
+
+// 计算四柱八字
+function getFullBazi (date = new Date()) {
+  const lunar = Lunar.fromDate(date)
+  return `${lunar.getYearInGanZhi()}年 ${lunar.getMonthInGanZhi()}月 ${lunar.getDayInGanZhi()}日 ${lunar.getTimeInGanZhi()}时`
+}
 
 // 检查白名单
 function isWhitelisted (userId, chatId) {
