@@ -11,8 +11,6 @@ import { getFullBazi } from './utils/ganzhi.js'
 import { generateHexagram } from './utils/hexagram.js'
 
 const TOKEN = ENV_BOT_TOKEN // Get it from @BotFather https://core.telegram.org/bots#6-botfather
-const WEBHOOK = '/endpoint'
-const SECRET = ENV_BOT_SECRET // A-Z, a-z, 0-9, _ and -
 
 /**
  * AI 接口配置（来自环境变量）
@@ -28,6 +26,22 @@ const AI_API_KEY      = ENV_AI_API_KEY      // AI API Key，用于鉴权
 const USER_WHITELIST = ENV_USER_WHITELIST ? ENV_USER_WHITELIST.split(',').map(id => parseInt(id.trim())) : [] // 用户白名单，用逗号分隔的用户ID
 const GROUP_WHITELIST = ENV_GROUP_WHITELIST ? ENV_GROUP_WHITELIST.split(',').map(id => parseInt(id.trim())) : [] // 群组白名单，用逗号分隔的群组ID
 
+// ---------------- 安全路径配置 ----------------
+// 通过 ENV_SAFE_PATH 指定一个"安全前缀"，所有接口均挂载在该前缀之下。
+// 例如：ENV_SAFE_PATH = "mysecret" ➜ 实际路径为 "/mysecret/endpoint" 等。
+const SAFE_PATH_INPUT = ENV_SAFE_PATH || ''        // 可为 "mysecret" 或 "/mysecret"
+// 确保最终 SAFE_PATH 以单个前导斜杠开始，且无尾部斜杠（"" 表示不使用安全路径）。
+const SAFE_PATH = SAFE_PATH_INPUT
+  ? `/${SAFE_PATH_INPUT.replace(/^\/+/g, '').replace(/\/+$/g, '')}`
+  : ''
+
+// 在安全路径下拼接各业务子路径
+const WEBHOOK               = `${SAFE_PATH}/endpoint`
+const REGISTER_WEBHOOK_PATH = `${SAFE_PATH}/registerWebhook`
+const UNREGISTER_WEBHOOK_PATH = `${SAFE_PATH}/unRegisterWebhook`
+
+const SECRET = ENV_BOT_SECRET // A-Z, a-z, 0-9, _ and -
+
 /**
  * @brief Cloudflare Worker 入口事件监听器。
  * @details 监听 <code>fetch</code> 事件，根据请求路径将流量路由至对应的业务处理函数。
@@ -36,12 +50,13 @@ addEventListener('fetch', event => {
   const url = new URL(event.request.url)
   if (url.pathname === WEBHOOK) {
     event.respondWith(handleWebhook(event))
-  } else if (url.pathname === '/registerWebhook') {
+  } else if (url.pathname === REGISTER_WEBHOOK_PATH) {
     event.respondWith(registerWebhook(event, url, WEBHOOK, SECRET))
-  } else if (url.pathname === '/unRegisterWebhook') {
+  } else if (url.pathname === UNREGISTER_WEBHOOK_PATH) {
     event.respondWith(unRegisterWebhook(event))
   } else {
-    event.respondWith(new Response('No handler for this request'))
+    // 所有未在白名单中的路径统一返回 404
+    event.respondWith(new Response('Not Found', { status: 404 }))
   }
 })
 

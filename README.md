@@ -11,6 +11,7 @@
 | 🛡️ 白名单控制      | 内置用户白名单 / 群组白名单，轻松实现权限管理                                           |
 | 💬 命令交互        | 支持 `/sm`（占卜）、`/id`（查询 ID）等指令，避免群聊刷屏                                |
 | 🔗 消息引用        | 群聊中可引用他人消息后发送 `/sm`，直接对引用内容进行解析                                |
+| 🔐 安全路径前缀    | 通过 `ENV_SAFE_PATH` 将所有接口限制在专属路径下，未命中返回 404，提高防扫描安全性          |
 | ⚡ Serverless 架构  | 基于 Cloudflare Workers，零服务器运维成本，自动弹性伸缩                                 |
 
 ---
@@ -60,6 +61,7 @@ npm install
 | `ENV_BOT_SECRET`       | ✅   | `your-super-secret-token-123`                        | 自定义，用于校验 Telegram Webhook      |
 | `ENV_AI_API_ENDPOINT`  | ✅   | `https://openrouter.ai/api/v1/chat/completions`      | AI 聊天接口地址                        |
 | `ENV_AI_API_KEY`       | ✅   | `sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`           | AI Key                                 |
+| `ENV_SAFE_PATH`        | ⬜   | `mysecret`                                          | 安全路径前缀，可提高安全性（留空则不启用）|
 | `ENV_USER_WHITELIST`   | ⬜   | `123456,789012`                                     | 用户白名单，多 ID 逗号分隔             |
 | `ENV_GROUP_WHITELIST`  | ⬜   | `-1001234567,-1009876543`                            | 群组白名单（群组 ID 为负数）           |
 
@@ -125,13 +127,13 @@ npx wrangler deploy --minify
 注册 Webhook（自动调用 `setWebhook`）：
 
 ```
-https://YOUR_WORKER_URL/registerWebhook
+https://YOUR_WORKER_URL/<ENV_SAFE_PATH>/registerWebhook
 ```
 
 取消 Webhook：
 
 ```
-https://YOUR_WORKER_URL/unRegisterWebhook
+https://YOUR_WORKER_URL/<ENV_SAFE_PATH>/unRegisterWebhook
 ```
 
 ---
