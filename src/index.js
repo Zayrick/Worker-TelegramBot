@@ -12,6 +12,11 @@ import { generateHexagram } from './utils/hexagram.js'
 
 const TOKEN = ENV_BOT_TOKEN // Get it from @BotFather https://core.telegram.org/bots#6-botfather
 
+// 机器人用户名（用于群聊中 /command@BotName 解析），无需前缀 @，请在环境变量中配置
+const BOT_USERNAME = (typeof ENV_BOT_USERNAME !== 'undefined' && ENV_BOT_USERNAME)
+  ? ENV_BOT_USERNAME.trim().toLowerCase()
+  : ''
+
 /**
  * AI 接口配置（来自环境变量）
  */
@@ -148,8 +153,22 @@ async function onMessage (message) {
    *          isCommand 用于快速判断该消息是否以 '/' 开头，为命令形式。
    */
   const messageText = (message.text || '').trim()
-  const messageTextLower = messageText.toLowerCase()
   const isCommand = messageText.startsWith('/')
+
+  // ----------- 通用命令解析 -----------
+  // Telegram 群聊中常见形态：/cmd@BotName 参数...
+  // 取首个空格前片段作为完整指令，再按 @ 分割出命令与 BotName
+  let commandBaseLower = ''
+  if (isCommand) {
+    const [commandWithMention] = messageText.split(' ')
+    const [commandBase, mentionedBot] = commandWithMention.split('@')
+    commandBaseLower = commandBase.toLowerCase()
+
+    // 若消息显式指向其他 Bot，则直接忽略
+    if (mentionedBot && BOT_USERNAME && mentionedBot.toLowerCase() !== BOT_USERNAME) {
+      return
+    }
+  }
 
   // 1. 检查白名单权限
   if (!isWhitelisted(userId, chatId)) {
@@ -159,16 +178,17 @@ async function onMessage (message) {
   // 2. 解析命令相关属性
   const isGroup = chatId < 0 // 负数表示群聊
 
-  // 处理 /id（大小写不敏感）命令
-  if (isCommand && messageTextLower.startsWith('/id')) {
+  // 处理 /id 命令
+  if (isCommand && commandBaseLower === '/id') {
     const idInfo = `用户ID: <code>${userId}</code>\n聊天ID: <code>${chatId}</code>`
     return sendPlainText(chatId, idInfo, message.message_id)
   }
 
-  // 处理 /sm（大小写不敏感）或 /算命 命令
-  if (isCommand && (messageTextLower.startsWith('/sm') || messageText.startsWith('/算命'))) {
-    // 提取命令后的问题内容
-    let question = messageText.substring(3).trim()
+  // 处理 /sm 或 /算命 命令
+  if (isCommand && (commandBaseLower === '/sm' || commandBaseLower === '/算命')) {
+    // 取首个空格后的内容作为问题
+    const questionFull = messageText.split(' ').slice(1).join(' ')
+    let question = questionFull.trim()
 
     // 检查是否有引用消息
     let referencedMessage = null

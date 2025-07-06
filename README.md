@@ -9,7 +9,7 @@
 | 🔮 小六壬占卜      | 基于干支四柱随机生成卦象，并结合 AI 提供专业解读                                         |
 | 🤖 AI 智能分析     | 兼容 OpenAI / OpenRouter 等 Chat Completion 接口，支持多模型切换                         |
 | 🛡️ 白名单控制      | 内置用户白名单 / 群组白名单，轻松实现权限管理                                           |
-| 💬 命令交互        | 支持 `/sm`（占卜）、`/id`（查询 ID）等指令，避免群聊刷屏                                |
+| 💬 命令交互        | 支持 `/sm`（占卜）、`/sm@BotName`、`/算命`、`/id` 等指令，兼容群聊 @ 提及，避免刷屏 |
 | 🔗 消息引用        | 群聊中可引用他人消息后发送 `/sm`，直接对引用内容进行解析                                |
 | 🔐 安全路径前缀    | 通过 `ENV_SAFE_PATH` 将所有接口限制在专属路径下，未命中返回 404，提高防扫描安全性          |
 | ⚡ Serverless 架构  | 基于 Cloudflare Workers，零服务器运维成本，自动弹性伸缩                                 |
@@ -53,7 +53,7 @@ npm install
 
 ### 3. 配置环境变量
 
-本项目 **必须** 配置以下 4 个核心环境变量，另有 2 个白名单可选：
+本项目 **必须** 配置以下 4 个核心环境变量，另有 3 个可选：
 
 | 变量名                 | 必需 | 示例值                                               | 说明                                   |
 | ---------------------- | ---- | ---------------------------------------------------- | -------------------------------------- |
@@ -62,6 +62,7 @@ npm install
 | `ENV_AI_API_ENDPOINT`  | ✅   | `https://openrouter.ai/api/v1/chat/completions`      | AI 聊天接口地址                        |
 | `ENV_AI_API_KEY`       | ✅   | `sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`           | AI Key                                 |
 | `ENV_SAFE_PATH`        | ⬜   | `mysecret`                                          | 安全路径前缀，可提高安全性（留空则不启用）|
+| `ENV_BOT_USERNAME`     | ⬜   | `my_fortune_bot`                                    | Bot 用户名（去掉 `@`），用于解析 `/cmd@BotName` |
 | `ENV_USER_WHITELIST`   | ⬜   | `123456,789012`                                     | 用户白名单，多 ID 逗号分隔             |
 | `ENV_GROUP_WHITELIST`  | ⬜   | `-1001234567,-1009876543`                            | 群组白名单（群组 ID 为负数）           |
 
@@ -73,7 +74,8 @@ wrangler secret put ENV_BOT_SECRET
 wrangler secret put ENV_AI_API_ENDPOINT
 wrangler secret put ENV_AI_API_KEY
 
-# 可选白名单
+# 可选变量
+wrangler secret put ENV_BOT_USERNAME
 wrangler secret put ENV_USER_WHITELIST
 wrangler secret put ENV_GROUP_WHITELIST
 ```
