@@ -190,13 +190,28 @@ async function onMessage (message) {
     return sendPlainText(chatId, '未知指令，请检查后重试。\n当前支持的指令：/sm（/算命）、/id', message.message_id)
   }
 
-  // 4. 非指令消息：群聊忽略，私聊提示正确用法
+  // 4. 非命令消息处理
   if (isGroup) {
-    return // 群聊中非指令消息直接忽略，避免打扰
+    // 群聊中非命令消息直接忽略，避免刷屏
+    return
   }
 
-  // 私聊且非指令，提示用户可用命令
-  return sendPlainText(chatId, '请使用 /sm 命令来进行占卜，例如：/sm 今天运势如何？\n或使用 /算命 作为中文别名。\n使用 /id 查看您的用户ID', message.message_id)
+  // 私聊场景：用户直接发送文字即视为占卜问题
+  let question = messageText
+  let referencedMessage = null
+
+  // 若引用了其他消息，则优先使用引用内容作为问题
+  if (message.reply_to_message && message.reply_to_message.text) {
+    referencedMessage = message.reply_to_message
+    question = referencedMessage.text
+  }
+
+  // 若问题为空，提示用户
+  if (!question) {
+    return sendPlainText(chatId, '请输入您想要占卜的问题内容。', message.message_id)
+  }
+
+  return await processDivination(question, chatId, message.message_id, referencedMessage)
 }
 
 /**
