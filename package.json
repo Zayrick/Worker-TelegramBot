@@ -9,11 +9,11 @@
 		"test": "vitest"
 	},
 	"dependencies": {
-		"lunar-javascript": "latest"
+		"lunar-javascript": "*"
 	},
 	"devDependencies": {
-		"@cloudflare/vitest-pool-workers": "latest",
-		"vitest": "latest",
-		"wrangler": "latest"
+		"@cloudflare/vitest-pool-workers": "*",
+		"vitest": "*",
+		"wrangler": "*"
 	}
 }
