@@ -67,8 +67,14 @@ export async function onMessage (message) {
   }
 
   // 未知指令
+  // 群聊中仅响应已注册指令，忽略其他命令；私聊仍提示未知指令
   if (isCommand) {
-    return sendPlainText(chatId, '未知指令，请检查后重试。\n当前支持的指令：/sm（/算命）、/id', message.message_id)
+    if (isGroup) return // 群聊忽略未注册指令
+    return sendPlainText(
+      chatId,
+      '未知指令，请检查后重试。\n当前支持的指令：/sm（/算命）、/id',
+      message.message_id
+    )
   }
 
   // 非命令消息
