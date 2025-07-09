@@ -55,24 +55,29 @@ export async function onMessage (message) {
 
   // /sm 或 /算命
   if (isCommand && (commandBaseLower === '/sm' || commandBaseLower === '/算命')) {
-    // 提取命令后的文本内容
     const questionFull = messageText.split(' ').slice(1).join(' ')
     let question = questionFull.trim()
+    let referencedMessage = null
+    let useSpecialFormat = false
 
-    // 处理引用消息（如果有）
-    let referencedTextForAI = null
+    // 检查是否有引用消息
     if (message.reply_to_message) {
-      const refText = extractTextFromMessage(message.reply_to_message)
+      referencedMessage = message.reply_to_message
+      const refText = extractTextFromMessage(referencedMessage)
 
-      // 判断是否存在额外问题文本（非空且不是仅提及机器人）
-      const mentionSelf = BOT_USERNAME ? `@${BOT_USERNAME}` : ''
-      const hasExtraQuestion = question.length > 0 && (!mentionSelf || question.toLowerCase() !== mentionSelf)
-
-      if (hasExtraQuestion) {
-        // 同时存在引用与额外问题文本：引用内容作为额外 user 消息传给 AI
-        referencedTextForAI = refText || null
-      } else {
-        // 仅有引用，无额外文本（或仅提及机器人）：沿用旧逻辑，将引用内容视为问题
+      // 检查是否符合特殊格式的条件：
+      // 1. 有引用内容
+      // 2. 有命令参数（question不为空）
+      // 3. 参数不是@机器人ID
+      if (refText && question && !question.startsWith('@')) {
+        // 符合特殊格式条件，使用引用内容+用户问题的组合格式
+        useSpecialFormat = true
+        // question保持原样，refText将在processDivination中处理
+      } else if (refText && !question) {
+        // 只有引用没有参数，按原逻辑处理
+        question = refText
+      } else if (refText && question.startsWith('@')) {
+        // 引用后接@机器人ID，按原逻辑处理
         question = refText
       }
     }
@@ -80,12 +85,12 @@ export async function onMessage (message) {
     if (!question) {
       return sendPlainText(
         chatId,
-        '使用方法：\n1. 直接发送 /sm 问题，例如：/sm 今天运势如何？\n2. 群聊中可先引用消息后发送 /sm，对引用内容进行占卜。',
+        '使用方法：\n1. 直接发送 /sm 问题，例如：/sm 今天运势如何？\n2. 群聊中可先引用消息后发送 /sm，对引用内容进行占卜。\n3. 引用消息后发送 /sm 问题，可同时分析引用内容和你的问题。',
         message.message_id
       )
     }
 
-    return processDivination(question, chatId, message.message_id, referencedTextForAI)
+    return processDivination(question, chatId, message.message_id, referencedMessage, useSpecialFormat)
   }
 
   // 未知指令
@@ -104,20 +109,38 @@ export async function onMessage (message) {
 
   // 私聊直接视为占卜问题
   let question = messageText
-  let replyTargetId = message.message_id
+  let referencedMessage = null
+  let useSpecialFormat = false
+
   if (message.reply_to_message) {
-    const refText = extractTextFromMessage(message.reply_to_message)
-    if (refText) question = refText
-    replyTargetId = message.reply_to_message.message_id
+    referencedMessage = message.reply_to_message
+    const refText = extractTextFromMessage(referencedMessage)
+
+    // 检查是否符合特殊格式的条件：
+    // 1. 有引用内容
+    // 2. 有用户输入的问题（messageText不为空）
+    // 3. 输入不是@机器人ID
+    if (refText && messageText && !messageText.startsWith('@')) {
+      // 符合特殊格式条件，使用引用内容+用户问题的组合格式
+      useSpecialFormat = true
+      // question保持原样（messageText），refText将在processDivination中处理
+    } else if (refText && !messageText) {
+      // 只有引用没有输入，按原逻辑处理
+      question = refText
+    } else if (refText && messageText.startsWith('@')) {
+      // 引用后接@机器人ID，按原逻辑处理
+      question = refText
+    }
   }
+
   if (!question) {
     return sendPlainText(chatId, '请输入您想要占卜的问题内容。', message.message_id)
   }
-  return processDivination(question, chatId, replyTargetId)
+  return processDivination(question, chatId, message.message_id, referencedMessage, useSpecialFormat)
 }
 
 // 占卜核心流程
-async function processDivination (question, chatId, replyToMessageId, referencedTextForAI = null) {
+async function processDivination (question, chatId, replyToMessageId, referencedMessage, useSpecialFormat = false) {
   const nowUTC = new Date()
   const beijingTime = new Date(nowUTC.getTime() + 8 * 60 * 60 * 1000)
   const ganzhi = getFullBazi(beijingTime)
@@ -125,11 +148,21 @@ async function processDivination (question, chatId, replyToMessageId, referenced
   const hexagram = generateHexagram(Array.from(randomArray, n => (n % 6) + 1))
   const timeStr = `${beijingTime.getFullYear()}年${beijingTime.getMonth() + 1}月${beijingTime.getDate()}日 ` +
                   `${beijingTime.getHours().toString().padStart(2, '0')}:${beijingTime.getMinutes().toString().padStart(2, '0')}`
-  const userPrompt = `所问之事：${question}\n所得之卦：${hexagram}\n所占之时：${ganzhi}\n所测之刻：${timeStr}`
-  const replyToId = replyToMessageId
+
+  let userPrompt
+  if (useSpecialFormat && referencedMessage) {
+    // 使用特殊格式：引用内容 + 所问之事 + 剩余内容
+    const refText = extractTextFromMessage(referencedMessage)
+    userPrompt = `${refText}\n所问之事：${question}\n所得之卦：${hexagram}\n所占之时：${ganzhi}\n所测之刻：${timeStr}`
+  } else {
+    // 使用原始格式
+    userPrompt = `所问之事：${question}\n所得之卦：${hexagram}\n所占之时：${ganzhi}\n所测之刻：${timeStr}`
+  }
+
+  const replyToId = referencedMessage ? referencedMessage.message_id : replyToMessageId
   const placeholderResp = await sendPlainText(chatId, '🔮', replyToId)
   const placeholderMsgId = placeholderResp?.result?.message_id
-  const aiReply = await callAI(userPrompt, referencedTextForAI)
+  const aiReply = await callAI(userPrompt)
   if (placeholderMsgId) {
     await editPlainText(chatId, placeholderMsgId, aiReply)
     return placeholderResp
