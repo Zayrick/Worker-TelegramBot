@@ -1,16 +1,19 @@
 import { AI_API_ENDPOINT, AI_API_KEY, AI_MODEL_NAME, AI_SYSTEM_PROMPT } from '../config.js'
 
 // 调用 AI 聊天接口
-export async function callAI (userMessages) {
-  // 兼容单字符串与字符串数组两种调用方式
-  const userMsgsArray = Array.isArray(userMessages) ? userMessages : [userMessages]
+export async function callAI (userPrompt, referencedContent = null) {
+  // 构造对话消息数组：始终包含系统提示词；当传入引用内容时，先附加引用内容，再附加占卜内容
+  const messages = [
+    { role: 'system', content: AI_SYSTEM_PROMPT }
+  ]
+  if (referencedContent) {
+    messages.push({ role: 'user', content: referencedContent })
+  }
+  messages.push({ role: 'user', content: userPrompt })
 
   const payload = {
     model: AI_MODEL_NAME,
-    messages: [
-      { role: 'system', content: AI_SYSTEM_PROMPT },
-      ...userMsgsArray.map(content => ({ role: 'user', content }))
-    ],
+    messages,
     stream: false
   }
 
