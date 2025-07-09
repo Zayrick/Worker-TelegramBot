@@ -55,22 +55,33 @@ export async function onMessage (message) {
 
   // /sm 或 /算命
   if (isCommand && (commandBaseLower === '/sm' || commandBaseLower === '/算命')) {
-    const questionFull = messageText.split(' ').slice(1).join(' ')
-    let question = questionFull.trim()
+    const argsText = messageText.split(' ').slice(1).join(' ').trim() // 占卜问题 XXXX
+    let question = argsText
+    let quotedContent = ''
     let referencedMessage = null
+
     if (message.reply_to_message) {
       referencedMessage = message.reply_to_message
-      const refText = extractTextFromMessage(referencedMessage)
-      if (refText) question = refText
+      quotedContent = extractTextFromMessage(referencedMessage)
+
+      // 如果引用内容只是 @机器人 的提及，则不算有效引用
+      const botMention = BOT_USERNAME ? `@${BOT_USERNAME}` : ''
+      if (quotedContent && botMention && quotedContent.trim().toLowerCase() === botMention) {
+        quotedContent = ''
+        referencedMessage = null
+      }
     }
-    if (!question) {
+
+    // 同时缺少问题与引用内容时，提示用法
+    if (!question && !quotedContent) {
       return sendPlainText(
         chatId,
-        '使用方法：\n1. 直接发送 /sm 问题，例如：/sm 今天运势如何？\n2. 群聊中可先引用消息后发送 /sm，对引用内容进行占卜。',
+        '使用方法：\n1. 直接发送 /sm 问题，例如：/sm 今天运势如何？\n2. 群聊中可先引用消息后发送 /sm 问题，对引用内容与问题进行占卜。',
         message.message_id
       )
     }
-    return processDivination(question, chatId, message.message_id, referencedMessage)
+
+    return processDivination({ question, quotedContent }, chatId, message.message_id, referencedMessage)
   }
 
   // 未知指令
@@ -89,20 +100,24 @@ export async function onMessage (message) {
 
   // 私聊直接视为占卜问题
   let question = messageText
+  let quotedContent = ''
   let referencedMessage = null
   if (message.reply_to_message) {
     referencedMessage = message.reply_to_message
-    const refText = extractTextFromMessage(referencedMessage)
-    if (refText) question = refText
+    quotedContent = extractTextFromMessage(referencedMessage)
+    if (quotedContent) {
+      // 私聊中默认把引用内容作为问题
+      question = quotedContent
+    }
   }
   if (!question) {
     return sendPlainText(chatId, '请输入您想要占卜的问题内容。', message.message_id)
   }
-  return processDivination(question, chatId, message.message_id, referencedMessage)
+  return processDivination({ question, quotedContent }, chatId, message.message_id, referencedMessage)
 }
 
 // 占卜核心流程
-async function processDivination (question, chatId, replyToMessageId, referencedMessage) {
+async function processDivination ({ question, quotedContent }, chatId, replyToMessageId, referencedMessage) {
   const nowUTC = new Date()
   const beijingTime = new Date(nowUTC.getTime() + 8 * 60 * 60 * 1000)
   const ganzhi = getFullBazi(beijingTime)
@@ -110,14 +125,20 @@ async function processDivination (question, chatId, replyToMessageId, referenced
   const hexagram = generateHexagram(Array.from(randomArray, n => (n % 6) + 1))
   const timeStr = `${beijingTime.getFullYear()}年${beijingTime.getMonth() + 1}月${beijingTime.getDate()}日 ` +
                   `${beijingTime.getHours().toString().padStart(2, '0')}:${beijingTime.getMinutes().toString().padStart(2, '0')}`
-  const userPrompt = `所问之事：${question}\n所得之卦：${hexagram}\n所占之时：${ganzhi}\n所测之刻：${timeStr}`
+  // 占卜内容
+  const divinationPrompt = `所问之事：${question}\n所得之卦：${hexagram}\n所占之时：${ganzhi}\n所测之刻：${timeStr}`
+
+  // 组装多条用户消息
+  const userMessages = []
+  if (quotedContent) userMessages.push({ role: 'user', content: quotedContent })
+  userMessages.push({ role: 'user', content: divinationPrompt })
   const replyToId = referencedMessage ? referencedMessage.message_id : replyToMessageId
   const placeholderResp = await sendPlainText(chatId, '🔮', replyToId)
   const placeholderMsgId = placeholderResp?.result?.message_id
-  const aiReply = await callAI(userPrompt)
+  const aiReply = await callAI(userMessages)
   if (placeholderMsgId) {
     await editPlainText(chatId, placeholderMsgId, aiReply)
     return placeholderResp
   }
   return sendPlainText(chatId, aiReply, replyToId)
-} 
+}
