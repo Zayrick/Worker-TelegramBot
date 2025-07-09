@@ -1,19 +1,15 @@
 import { AI_API_ENDPOINT, AI_API_KEY, AI_MODEL_NAME, AI_SYSTEM_PROMPT } from '../config.js'
 
 // 调用 AI 聊天接口
-// messages 参数可以是字符串，也可以是形如 [{ role: 'user', content: '...' }, ...] 的数组。
-// 这样可在一次调用中按需插入多条用户角色内容。
-export async function callAI (messages) {
-  // 如果传入的是字符串，则转换为包含单条用户内容的数组
-  const userMessages = Array.isArray(messages)
-    ? messages
-    : [{ role: 'user', content: messages }]
+export async function callAI (userMessages) {
+  // 兼容单字符串与字符串数组两种调用方式
+  const userMsgsArray = Array.isArray(userMessages) ? userMessages : [userMessages]
 
   const payload = {
     model: AI_MODEL_NAME,
     messages: [
       { role: 'system', content: AI_SYSTEM_PROMPT },
-      ...userMessages
+      ...userMsgsArray.map(content => ({ role: 'user', content }))
     ],
     stream: false
   }
