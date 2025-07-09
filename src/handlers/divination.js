@@ -4,6 +4,12 @@ import { sendPlainText, editPlainText } from '../services/telegram.js'
 import { callAI } from '../services/ai.js'
 import { BOT_USERNAME, USER_WHITELIST, GROUP_WHITELIST } from '../config.js'
 
+// 提取消息中的文本（兼容 text 与 caption）
+function extractTextFromMessage (msg) {
+  if (!msg) return ''
+  return (msg.text ?? msg.caption ?? '').trim()
+}
+
 // 计算四柱八字
 function getFullBazi (date = new Date()) {
   const lunar = Lunar.fromDate(date)
@@ -54,7 +60,8 @@ export async function onMessage (message) {
     let referencedMessage = null
     if (message.reply_to_message) {
       referencedMessage = message.reply_to_message
-      if (referencedMessage.text) question = referencedMessage.text
+      const refText = extractTextFromMessage(referencedMessage)
+      if (refText) question = refText
     }
     if (!question) {
       return sendPlainText(
@@ -83,9 +90,10 @@ export async function onMessage (message) {
   // 私聊直接视为占卜问题
   let question = messageText
   let referencedMessage = null
-  if (message.reply_to_message?.text) {
+  if (message.reply_to_message) {
     referencedMessage = message.reply_to_message
-    question = referencedMessage.text
+    const refText = extractTextFromMessage(referencedMessage)
+    if (refText) question = refText
   }
   if (!question) {
     return sendPlainText(chatId, '请输入您想要占卜的问题内容。', message.message_id)
