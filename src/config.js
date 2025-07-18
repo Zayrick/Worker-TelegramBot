@@ -10,6 +10,7 @@ export const BOT_USERNAME = (typeof ENV_BOT_USERNAME !== 'undefined' && ENV_BOT_
 export const AI_API_ENDPOINT = ENV_AI_API_ENDPOINT
 export const AI_MODEL_NAME   = ENV_AI_MODEL_NAME
 export const AI_SYSTEM_PROMPT = ENV_AI_SYSTEM_PROMPT
+export const AI_DIRTY_SYSTEM_PROMPT = ENV_AI_DIRTY_SYSTEM_PROMPT
 export const AI_API_KEY      = ENV_AI_API_KEY
 
 // 白名单配置
@@ -27,4 +28,4 @@ export const WEBHOOK               = `${SAFE_PATH}/endpoint`
 export const REGISTER_WEBHOOK_PATH = `${SAFE_PATH}/registerWebhook`
 export const UNREGISTER_WEBHOOK_PATH = `${SAFE_PATH}/unRegisterWebhook`
 
-export const SECRET = ENV_BOT_SECRET 
+export const SECRET = ENV_BOT_SECRET
