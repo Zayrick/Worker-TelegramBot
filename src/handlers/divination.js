@@ -98,32 +98,28 @@ export async function onMessage (message) {
     const questionFull = messageText.split(' ').slice(1).join(' ')
     let question = questionFull.trim()
     let referencedMessage = null
-    let useSpecialFormat = false
 
-    // 检查是否有引用消息
+    // 如果有引用消息且未提供具体问题，则使用引用文本作为问题；否则保留用户输入的问题
     if (message.reply_to_message) {
       referencedMessage = message.reply_to_message
       const refText = extractTextFromMessage(referencedMessage)
-
-      // 判断是否使用特殊组合格式
-      if (refText && question && !question.startsWith('@')) {
-        useSpecialFormat = true
-      } else if (refText && !question) {
+      if (!question) {
         question = refText
-      } else if (refText && question.startsWith('@')) {
-        question = refText
+      } else if (refText) {
+        // 同时存在引用和问题，合并为两行便于 AI 理解
+        question = `${refText}\n${question}`
       }
     }
 
     if (!question) {
       return sendPlainText(
         chatId,
-        '使用方法：\n1. 直接发送 /dirty 问题，例如：/dirty 请点评这段内容\n2. 群聊中可先引用消息后发送 /dirty，对引用内容进行分析。\n3. 引用消息后发送 /dirty 问题，可同时分析引用内容和你的问题。',
+        '使用方法：\n1. 直接发送 /dirty 问题，例如：/dirty 请点评这段内容\n2. 群聊中可先引用消息后发送 /dirty，对引用内容进行分析。',
         message.message_id
       )
     }
 
-    return processDirty(question, chatId, message.message_id, referencedMessage, useSpecialFormat)
+    return processDirty(question, chatId, message.message_id)
   }
 
   // 未知指令
@@ -204,22 +200,13 @@ async function processDivination (question, chatId, replyToMessageId, referenced
 }
 
 // /dirty 指令处理流程（无卦象版本）
-async function processDirty (question, chatId, replyToMessageId, referencedMessage, useSpecialFormat = false) {
-  let userPrompt
-  if (useSpecialFormat && referencedMessage) {
-    const refText = extractTextFromMessage(referencedMessage)
-    userPrompt = `${refText}\n${question}`
-  } else {
-    userPrompt = question
-  }
-
-  const replyToId = referencedMessage ? referencedMessage.message_id : replyToMessageId
-  const placeholderResp = await sendPlainText(chatId, '💭', replyToId)
+async function processDirty (userPrompt, chatId, replyToMessageId) {
+  const placeholderResp = await sendPlainText(chatId, '💭', replyToMessageId)
   const placeholderMsgId = placeholderResp?.result?.message_id
   const aiReply = await callAIDirty(userPrompt)
   if (placeholderMsgId) {
     await editPlainText(chatId, placeholderMsgId, aiReply)
     return placeholderResp
   }
-  return sendPlainText(chatId, aiReply, replyToId)
+  return sendPlainText(chatId, aiReply, replyToMessageId)
 }

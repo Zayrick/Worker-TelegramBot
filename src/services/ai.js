@@ -59,7 +59,7 @@ export async function callAIDirty (userPrompt) {
 
   const data = await response.json()
   if (data.choices?.length && data.choices[0].message) {
-    return `<blockquote>${data.choices[0].message.content.trim()}</blockquote>`
+    return data.choices[0].message.content.trim()
   }
   return '抱歉，AI 未能给出有效回复。'
 }
