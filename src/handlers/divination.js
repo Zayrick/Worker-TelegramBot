@@ -2,7 +2,7 @@ import { Lunar } from 'lunar-javascript'
 import { generateHexagram } from '../utils/hexagram.js'
 import { sendPlainText, editPlainText } from '../services/telegram.js'
 import { callAI, callAIDirty } from '../services/ai.js'
-import { BOT_USERNAME, USER_WHITELIST, GROUP_WHITELIST } from '../config.js'
+import { BOT_USERNAME, USER_WHITELIST, GROUP_WHITELIST, USER_BLACKLIST } from '../config.js'
 
 // 提取消息中的文本（兼容 text 与 caption）
 function extractTextFromMessage (msg) {
@@ -16,11 +16,19 @@ function getFullBazi (date = new Date()) {
   return `${lunar.getYearInGanZhi()}年 ${lunar.getMonthInGanZhi()}月 ${lunar.getDayInGanZhi()}日 ${lunar.getTimeInGanZhi()}时`
 }
 
-// 检查白名单
+// 检查权限：先排除黑名单，再判断白名单
 function isWhitelisted (userId, chatId) {
+  // 若用户在黑名单，直接拒绝
+  if (USER_BLACKLIST && USER_BLACKLIST.includes(userId)) return false
+
+  // 若未配置任何白名单，默认放行（除非在黑名单）
   if (USER_WHITELIST.length === 0 && GROUP_WHITELIST.length === 0) return true
+
+  // 用户或群组在各自白名单中则放行
   if (USER_WHITELIST.includes(userId)) return true
   if (chatId < 0 && GROUP_WHITELIST.includes(chatId)) return true
+
+  // 其他情况拒绝
   return false
 }
 

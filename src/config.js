@@ -16,6 +16,10 @@ export const AI_API_KEY      = ENV_AI_API_KEY
 // 白名单配置
 export const USER_WHITELIST  = ENV_USER_WHITELIST  ? ENV_USER_WHITELIST.split(',').map(id => parseInt(id.trim())) : []
 export const GROUP_WHITELIST = ENV_GROUP_WHITELIST ? ENV_GROUP_WHITELIST.split(',').map(id => parseInt(id.trim())) : []
+// 用户黑名单配置
+export const USER_BLACKLIST  = typeof ENV_USER_BLACKLIST !== 'undefined' && ENV_USER_BLACKLIST
+  ? ENV_USER_BLACKLIST.split(',').map(id => parseInt(id.trim()))
+  : []
 
 // 安全路径配置
 const SAFE_PATH_INPUT = ENV_SAFE_PATH || ''

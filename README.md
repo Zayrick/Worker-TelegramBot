@@ -53,7 +53,7 @@ npm install
 
 ### 3. 配置环境变量
 
-本项目 **必须** 配置以下 4 个核心环境变量，另有 3 个可选：
+本项目 **必须** 配置以下 4 个核心环境变量，另有 4 个可选：
 
 | 变量名                 | 必需 | 示例值                                               | 说明                                   |
 | ---------------------- | ---- | ---------------------------------------------------- | -------------------------------------- |
@@ -65,6 +65,7 @@ npm install
 | `ENV_BOT_USERNAME`     | ⬜   | `my_fortune_bot`                                    | Bot 用户名（去掉 `@`），用于解析 `/cmd@BotName` |
 | `ENV_USER_WHITELIST`   | ⬜   | `123456,789012`                                     | 用户白名单，多 ID 逗号分隔             |
 | `ENV_GROUP_WHITELIST`  | ⬜   | `-1001234567,-1009876543`                            | 群组白名单（群组 ID 为负数）           |
+| `ENV_USER_BLACKLIST`   | ⬜   | `111111,222222`                                     | 用户黑名单，多 ID 逗号分隔（黑名单优先级最高）|
 
 使用 `wrangler secret put <ENV_NAME>` 将变量写入 Cloudflare Worker：
 
@@ -78,6 +79,7 @@ wrangler secret put ENV_AI_API_KEY
 wrangler secret put ENV_BOT_USERNAME
 wrangler secret put ENV_USER_WHITELIST
 wrangler secret put ENV_GROUP_WHITELIST
+wrangler secret put ENV_USER_BLACKLIST
 ```
 
 ### 4. 本地预览（可选）
@@ -214,3 +216,5 @@ telegram-worker-bot/
 * [OpenRouter](https://openrouter.ai/) / OpenAI
 
 > 如果本项目对你有所帮助，欢迎 ⭐Star 支持！
+
+---
