@@ -58,7 +58,8 @@ export async function onMessage (message) {
     const idInfo = (userId === chatId)
       ? `用户ID: <code>${userId}</code>`
       : `用户ID: <code>${userId}</code>\n群组ID: <code>${chatId}</code>`
-    return sendPlainText(chatId, idInfo, message.message_id)
+    const replyToId = message.reply_to_message ? message.reply_to_message.message_id : message.message_id
+    return sendPlainText(chatId, idInfo, replyToId)
   }
 
   // /sm 或 /算命
@@ -119,15 +120,18 @@ export async function onMessage (message) {
       }
     }
 
+    // 计算真正需要回复的消息 ID：优先使用引用消息，否则使用当前命令消息
+    const replyToId = referencedMessage ? referencedMessage.message_id : message.message_id
+
     if (!question) {
       return sendPlainText(
         chatId,
         '使用方法：\n1. 直接发送 /dirty 问题，例如：/dirty 请点评这段内容\n2. 群聊中可先引用消息后发送 /dirty，对引用内容进行分析。',
-        message.message_id
+        replyToId
       )
     }
 
-    return processDirty(question, chatId, message.message_id)
+    return processDirty(question, chatId, replyToId)
   }
 
   // 未知指令
