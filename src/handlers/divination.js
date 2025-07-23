@@ -174,11 +174,16 @@ async function processDivination (question, chatId, replyToMessageId, referenced
   const placeholderResp = await sendPlainText(chatId, '🔮', replyToId)
   const placeholderMsgId = placeholderResp?.result?.message_id
   const aiReply = await callAI(userPrompt)
+
+  // 构建最终回复：占卜信息 + AI结果
+  const divinationInfo = `<blockquote>所问之事：${question}\n所得之卦：${hexagram}\n所占之时：${ganzhi}</blockquote>`
+  const finalReply = `${divinationInfo}\n\n<blockquote>${aiReply}</blockquote>`
+
   if (placeholderMsgId) {
-    await editPlainText(chatId, placeholderMsgId, aiReply)
+    await editPlainText(chatId, placeholderMsgId, finalReply)
     return placeholderResp
   }
-  return sendPlainText(chatId, aiReply, replyToId)
+  return sendPlainText(chatId, finalReply, replyToId)
 }
 
 // 处理内联查询
@@ -232,7 +237,11 @@ async function generateDivinationAnswer (question) {
                   `${beijingTime.getHours().toString().padStart(2, '0')}:${beijingTime.getMinutes().toString().padStart(2, '0')}`
 
   const userPrompt = `所问之事：${question}\n所得之卦：${hexagram}\n所占之时：${ganzhi}\n所测之刻：${timeStr}`
-  return callAI(userPrompt)
+  const aiReply = await callAI(userPrompt)
+
+  // 构建最终回复：占卜信息 + AI结果
+  const divinationInfo = `<blockquote>所问之事：${question}\n所得之卦：${hexagram}\n所占之时：${ganzhi}</blockquote>`
+  return `${divinationInfo}\n\n<blockquote>${aiReply}</blockquote>`
 }
 
 

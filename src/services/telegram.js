@@ -65,7 +65,7 @@ export async function answerInlineQueryDivination (inlineQueryId, query) {
       title: '🔮 占卜查询',
       description: `对"${query}"进行占卜`,
       input_message_content: {
-        message_text: `所问之事：${query}\n所得之卦：${hexagram}\n所占之时：${ganzhi}\n所测之刻：${timeStr}`,
+        message_text: `<blockquote>所问之事：${query}\n所得之卦：${hexagram}\n所占之时：${ganzhi}</blockquote>`,
         parse_mode: 'HTML'
       },
       reply_markup: {
