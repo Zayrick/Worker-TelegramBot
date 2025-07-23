@@ -177,7 +177,7 @@ async function processDivination (question, chatId, replyToMessageId, referenced
 
   // 构建最终回复：占卜信息 + AI结果
   const divinationInfo = `<blockquote>所问之事：${question}\n所得之卦：${hexagram}\n所占之时：${ganzhi}</blockquote>`
-  const finalReply = `${divinationInfo}\n\n<blockquote>${aiReply}</blockquote>`
+  const finalReply = `${divinationInfo}\n<blockquote>${aiReply}</blockquote>`
 
   if (placeholderMsgId) {
     await editPlainText(chatId, placeholderMsgId, finalReply)
@@ -241,7 +241,7 @@ async function generateDivinationAnswer (question) {
 
   // 构建最终回复：占卜信息 + AI结果
   const divinationInfo = `<blockquote>所问之事：${question}\n所得之卦：${hexagram}\n所占之时：${ganzhi}</blockquote>`
-  return `${divinationInfo}\n\n<blockquote>${aiReply}</blockquote>`
+  return `${divinationInfo}\n<blockquote>${aiReply}</blockquote>`
 }
 
 
