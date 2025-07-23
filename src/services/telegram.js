@@ -62,8 +62,8 @@ export async function answerInlineQueryDivination (inlineQueryId, query) {
     {
       type: 'article',
       id: 'divination_query',
-      title: '🔮 占卜查询',
-      description: `对"${query}"进行占卜`,
+      title: '🔮 开始算命',
+      description: `算"${query}"`,
       input_message_content: {
         message_text: `<blockquote>所问之事：${query}\n所得之卦：${hexagram}\n所占之时：${ganzhi}</blockquote>`,
         parse_mode: 'HTML'
@@ -71,7 +71,7 @@ export async function answerInlineQueryDivination (inlineQueryId, query) {
       reply_markup: {
         inline_keyboard: [[
           {
-            text: '✅ 确认占卜',
+            text: 'AI占卜',
             callback_data: query
           }
         ]]
