@@ -171,7 +171,8 @@ async function processDivination (question, chatId, replyToMessageId, referenced
   }
 
   const replyToId = referencedMessage ? referencedMessage.message_id : replyToMessageId
-  const placeholderResp = await sendPlainText(chatId, '🔮', replyToId)
+  const placeholderText = `<blockquote>所问之事：${question}\n所得之卦：${hexagram}\n所占之时：${ganzhi}</blockquote>`
+  const placeholderResp = await sendPlainText(chatId, placeholderText, replyToId)
   const placeholderMsgId = placeholderResp?.result?.message_id
   const aiReply = await callAI(userPrompt)
 
