@@ -1,7 +1,7 @@
 import { Lunar } from 'lunar-javascript'
 import { generateHexagram } from '../utils/hexagram.js'
 import { sendPlainText, editPlainText } from '../services/telegram.js'
-import { callAI, callAIDirty } from '../services/ai.js'
+import { callAI } from '../services/ai.js'
 import { BOT_USERNAME, USER_WHITELIST, GROUP_WHITELIST, USER_BLACKLIST } from '../config.js'
 
 // 提取消息中的文本（兼容 text 与 caption）
@@ -102,37 +102,7 @@ export async function onMessage (message) {
     return processDivination(question, chatId, message.message_id, referencedMessage, useSpecialFormat)
   }
 
-  // /dirty 指令（简化版占卜/分析）
-  if (isCommand && commandBaseLower === '/dirty') {
-    const questionFull = messageText.split(' ').slice(1).join(' ')
-    let question = questionFull.trim()
-    let referencedMessage = null
 
-    // 如果有引用消息且未提供具体问题，则使用引用文本作为问题；否则保留用户输入的问题
-    if (message.reply_to_message) {
-      referencedMessage = message.reply_to_message
-      const refText = extractTextFromMessage(referencedMessage)
-      if (!question) {
-        question = refText
-      } else if (refText) {
-        // 同时存在引用和问题，合并为两行便于 AI 理解
-        question = `${refText}\n${question}`
-      }
-    }
-
-    // 计算真正需要回复的消息 ID：优先使用引用消息，否则使用当前命令消息
-    const replyToId = referencedMessage ? referencedMessage.message_id : message.message_id
-
-    if (!question) {
-      return sendPlainText(
-        chatId,
-        '使用方法：\n1. 直接发送 /dirty 问题，例如：/dirty 请点评这段内容\n2. 群聊中可先引用消息后发送 /dirty，对引用内容进行分析。',
-        replyToId
-      )
-    }
-
-    return processDirty(question, chatId, replyToId)
-  }
 
   // 未知指令
   // 群聊中仅响应已注册指令，忽略其他命令；私聊仍提示未知指令
@@ -140,7 +110,7 @@ export async function onMessage (message) {
     if (isGroup) return // 群聊忽略未注册指令
     return sendPlainText(
       chatId,
-      '未知指令，请检查后重试。\n当前支持的指令：/sm（/算命）、/dirty、/id',
+      '未知指令，请检查后重试。\n当前支持的指令：/sm（/算命）、/id',
       message.message_id
     )
   }
@@ -211,14 +181,4 @@ async function processDivination (question, chatId, replyToMessageId, referenced
   return sendPlainText(chatId, aiReply, replyToId)
 }
 
-// /dirty 指令处理流程（无卦象版本）
-async function processDirty (userPrompt, chatId, replyToMessageId) {
-  const placeholderResp = await sendPlainText(chatId, '💭', replyToMessageId)
-  const placeholderMsgId = placeholderResp?.result?.message_id
-  const aiReply = await callAIDirty(userPrompt)
-  if (placeholderMsgId) {
-    await editPlainText(chatId, placeholderMsgId, aiReply)
-    return placeholderResp
-  }
-  return sendPlainText(chatId, aiReply, replyToMessageId)
-}
+
