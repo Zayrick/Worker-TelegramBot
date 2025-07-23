@@ -53,15 +53,6 @@ export async function onMessage (message) {
 
   const isGroup = chatId < 0
 
-  // /id 命令
-  if (isCommand && commandBaseLower === '/id') {
-    const idInfo = (userId === chatId)
-      ? `用户ID: <code>${userId}</code>`
-      : `用户ID: <code>${userId}</code>\n群组ID: <code>${chatId}</code>`
-    const replyToId = message.reply_to_message ? message.reply_to_message.message_id : message.message_id
-    return sendPlainText(chatId, idInfo, replyToId)
-  }
-
   // /sm 或 /算命
   if (isCommand && (commandBaseLower === '/sm' || commandBaseLower === '/算命')) {
     const questionFull = messageText.split(' ').slice(1).join(' ')
@@ -110,7 +101,7 @@ export async function onMessage (message) {
     if (isGroup) return // 群聊忽略未注册指令
     return sendPlainText(
       chatId,
-      '未知指令，请检查后重试。\n当前支持的指令：/sm（/算命）、/id',
+      '未知指令，请检查后重试。\n当前支持的指令：/sm（/算命）',
       message.message_id
     )
   }
