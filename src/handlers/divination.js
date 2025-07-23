@@ -1,6 +1,6 @@
 import { Lunar } from 'lunar-javascript'
 import { generateHexagram } from '../utils/hexagram.js'
-import { sendPlainText, editPlainText } from '../services/telegram.js'
+import { sendPlainText, editPlainText, answerInlineQueryEmpty, answerInlineQueryDivination, editInlineMessageText } from '../services/telegram.js'
 import { callAI } from '../services/ai.js'
 import { BOT_USERNAME, USER_WHITELIST, GROUP_WHITELIST, USER_BLACKLIST } from '../config.js'
 
@@ -179,6 +179,60 @@ async function processDivination (question, chatId, replyToMessageId, referenced
     return placeholderResp
   }
   return sendPlainText(chatId, aiReply, replyToId)
+}
+
+// 处理内联查询
+export async function onInlineQuery (inlineQuery) {
+  const userId = inlineQuery.from.id
+  const query = (inlineQuery.query || '').trim()
+
+  // 白名单检查
+  if (!isWhitelisted(userId, userId)) {
+    return answerInlineQueryEmpty(inlineQuery.id)
+  }
+
+  // 空查询返回预设选项
+  if (!query) {
+    return answerInlineQueryEmpty(inlineQuery.id)
+  }
+
+  // 非空查询返回占卜选项
+  return answerInlineQueryDivination(inlineQuery.id, query)
+}
+
+// 处理回调查询（用户点击内联键盘按钮）
+export async function onCallbackQuery (callbackQuery) {
+  const userId = callbackQuery.from.id
+  const inlineMessageId = callbackQuery.inline_message_id
+  const query = (callbackQuery.data || '').trim()
+
+  // 白名单检查
+  if (!isWhitelisted(userId, userId)) return
+
+  // 验证查询内容
+  if (!query || !inlineMessageId) return
+
+  // 生成占卜结果（复用现有的占卜逻辑）
+  const aiReply = await generateDivinationAnswer(query)
+
+  // 编辑内联消息，显示占卜结果
+  if (aiReply) {
+    await editInlineMessageText(inlineMessageId, aiReply)
+  }
+}
+
+// 生成占卜答案的辅助函数（提取公共逻辑）
+async function generateDivinationAnswer (question) {
+  const nowUTC = new Date()
+  const beijingTime = new Date(nowUTC.getTime() + 8 * 60 * 60 * 1000)
+  const ganzhi = getFullBazi(beijingTime)
+  const randomArray = crypto.getRandomValues(new Uint32Array(3))
+  const hexagram = generateHexagram(Array.from(randomArray, n => (n % 6) + 1))
+  const timeStr = `${beijingTime.getFullYear()}年${beijingTime.getMonth() + 1}月${beijingTime.getDate()}日 ` +
+                  `${beijingTime.getHours().toString().padStart(2, '0')}:${beijingTime.getMinutes().toString().padStart(2, '0')}`
+
+  const userPrompt = `所问之事：${question}\n所得之卦：${hexagram}\n所占之时：${ganzhi}\n所测之刻：${timeStr}`
+  return callAI(userPrompt)
 }
 
 

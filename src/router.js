@@ -4,7 +4,7 @@ import {
   UNREGISTER_WEBHOOK_PATH,
   SECRET
 } from './config.js'
-import { onMessage } from './handlers/divination.js'
+import { onMessage, onInlineQuery, onCallbackQuery } from './handlers/divination.js'
 import { apiUrl } from './services/telegram.js'
 
 // 主入口，供 index.js 调用
@@ -39,6 +39,10 @@ async function handleWebhook (event) {
 async function onUpdate (update) {
   if (update.message) {
     await onMessage(update.message)
+  } else if (update.inline_query) {
+    await onInlineQuery(update.inline_query)
+  } else if (update.callback_query) {
+    await onCallbackQuery(update.callback_query)
   }
 }
 
@@ -53,4 +57,4 @@ async function registerWebhook (event, requestUrl) {
 async function unRegisterWebhook () {
   const r = await (await fetch(apiUrl('setWebhook', { url: '' }))).json()
   return new Response(r.ok ? 'Ok' : JSON.stringify(r, null, 2))
-} 
+}
