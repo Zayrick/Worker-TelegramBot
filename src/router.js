@@ -4,7 +4,7 @@ import {
   UNREGISTER_WEBHOOK_PATH,
   SECRET
 } from './config.js'
-import { onMessage, onInlineQuery, onChosenInlineResult } from './handlers/divination.js'
+import { onMessage, onInlineQuery, onCallbackQuery } from './handlers/divination.js'
 import { apiUrl } from './services/telegram.js'
 
 // 主入口，供 index.js 调用
@@ -41,8 +41,8 @@ async function onUpdate (update) {
     await onMessage(update.message)
   } else if (update.inline_query) {
     await onInlineQuery(update.inline_query)
-  } else if (update.chosen_inline_result) {
-    await onChosenInlineResult(update.chosen_inline_result)
+  } else if (update.callback_query) {
+    await onCallbackQuery(update.callback_query)
   }
 }
 

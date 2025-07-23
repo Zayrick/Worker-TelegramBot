@@ -41,18 +41,23 @@ export async function answerInlineQueryEmpty (inlineQueryId) {
 
 // 回答内联查询 - 占卜查询
 export async function answerInlineQueryDivination (inlineQueryId, query) {
-  // 使用查询内容的哈希作为唯一ID
-  const resultId = btoa(unescape(encodeURIComponent(query))).slice(0, 64)
-
   const results = [
     {
       type: 'article',
-      id: resultId,
-      title: `🔮 ${query}`,
-      description: '点击获取占卜结果',
+      id: 'divination_query',
+      title: '🔮 占卜查询',
+      description: `对"${query}"进行占卜`,
       input_message_content: {
-        message_text: '🔮',
+        message_text: `🔮 正在为您解读【${query}】的占卜结果...`,
         parse_mode: 'HTML'
+      },
+      reply_markup: {
+        inline_keyboard: [[
+          {
+            text: '✅ 确认占卜',
+            callback_data: query
+          }
+        ]]
       }
     }
   ]
