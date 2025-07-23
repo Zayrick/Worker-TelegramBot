@@ -28,35 +28,12 @@ export async function editPlainText (chatId, messageId, text) {
   return (await fetch(apiUrl('editMessageText', params))).json()
 }
 
-// 回答内联查询 - 空查询时的预设选项
+// 回答内联查询 - 空查询时返回空结果
 export async function answerInlineQueryEmpty (inlineQueryId) {
-  const results = [
-    {
-      type: 'article',
-      id: 'clear_context',
-      title: '🧹 清除上下文',
-      description: '清除当前对话上下文',
-      input_message_content: {
-        message_text: '🧹 上下文已清除',
-        parse_mode: 'HTML'
-      }
-    },
-    {
-      type: 'article',
-      id: 'show_context',
-      title: '📋 显示上下文',
-      description: '显示当前对话上下文',
-      input_message_content: {
-        message_text: '📋 当前无上下文',
-        parse_mode: 'HTML'
-      }
-    }
-  ]
-
   const params = {
     inline_query_id: inlineQueryId,
-    results: JSON.stringify(results),
-    cache_time: 0
+    results: JSON.stringify([]),
+    cache_time: 60
   }
 
   return (await fetch(apiUrl('answerInlineQuery', params))).json()
@@ -64,23 +41,18 @@ export async function answerInlineQueryEmpty (inlineQueryId) {
 
 // 回答内联查询 - 占卜查询
 export async function answerInlineQueryDivination (inlineQueryId, query) {
+  // 使用查询内容的哈希作为唯一ID
+  const resultId = btoa(unescape(encodeURIComponent(query))).slice(0, 64)
+
   const results = [
     {
       type: 'article',
-      id: 'divination_query',
-      title: '🔮 占卜查询',
-      description: `对"${query}"进行占卜`,
+      id: resultId,
+      title: `🔮 ${query}`,
+      description: '点击获取占卜结果',
       input_message_content: {
-        message_text: `🔮 正在为您解读【${query}】的占卜结果...`,
+        message_text: '🔮',
         parse_mode: 'HTML'
-      },
-      reply_markup: {
-        inline_keyboard: [[
-          {
-            text: '✅ 确认占卜',
-            callback_data: query
-          }
-        ]]
       }
     }
   ]

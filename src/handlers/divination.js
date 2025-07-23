@@ -200,22 +200,30 @@ export async function onInlineQuery (inlineQuery) {
   return answerInlineQueryDivination(inlineQuery.id, query)
 }
 
-// 处理回调查询（用户点击内联键盘按钮）
-export async function onCallbackQuery (callbackQuery) {
-  const userId = callbackQuery.from.id
-  const inlineMessageId = callbackQuery.inline_message_id
-  const query = (callbackQuery.data || '').trim()
+// 处理选中的内联结果
+export async function onChosenInlineResult (chosenResult) {
+  const userId = chosenResult.from.id
+  const inlineMessageId = chosenResult.inline_message_id
 
   // 白名单检查
   if (!isWhitelisted(userId, userId)) return
+  if (!inlineMessageId) return
 
-  // 验证查询内容
-  if (!query || !inlineMessageId) return
+  // 从查询或结果ID中获取问题
+  let question = (chosenResult.query || '').trim()
+  if (!question) {
+    try {
+      // 尝试从result_id解码问题内容
+      question = decodeURIComponent(escape(atob(chosenResult.result_id)))
+    } catch (e) {
+      return // 无法获取问题内容
+    }
+  }
 
-  // 生成占卜结果（复用现有的占卜逻辑）
-  const aiReply = await generateDivinationAnswer(query)
+  if (!question) return
 
-  // 编辑内联消息，显示占卜结果
+  // 生成占卜结果并编辑内联消息
+  const aiReply = await generateDivinationAnswer(question)
   if (aiReply) {
     await editInlineMessageText(inlineMessageId, aiReply)
   }
